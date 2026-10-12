@@ -30,7 +30,7 @@ const SPLIT = [
 ];
 
 const TOTAL = 9;
-const CTA = ["Continue", "Continue", "Continue", "Continue", "Connect PayPal sandbox", "See my split", "Looks good, approve in PayPal", "", ""];
+const CTA = ["Continue", "Continue", "Continue", "Continue", "Connect PayPal", "See my split", "Looks good, approve in PayPal", "", ""];
 const NOTE = [
   "Nothing moves without your approval",
   "Nothing moves without your approval",
@@ -70,6 +70,68 @@ export default function OnboardingFlow() {
   const [budget, setBudget] = useState([20, 50, 100].includes(startAmount) ? startAmount : 50);
   const [research, setResearch] = useState(0);
   const [custom, setCustom] = useState(false);
+  // Real PayPal connection (Vault). Nothing is charged by connecting.
+  const [ppBusy, setPpBusy] = useState(false);
+  const [ppError, setPpError] = useState("");
+  const [ppEmail, setPpEmail] = useState<string | null>(null);
+
+  // Coming back from PayPal: continue after a good approval, or explain what happened.
+  useEffect(() => {
+    const r = params.get("paypal");
+    if (!r) return;
+    if (r === "connected") setStep(5);
+    else {
+      setStep(4);
+      setPpError(r === "cancelled" ? "You cancelled at PayPal, so nothing was connected." : params.get("msg") || "PayPal couldn’t be connected.");
+    }
+    fetch("/api/payments/status")
+      .then((x) => (x.ok ? x.json() : null))
+      .then((d) => d?.paypalEmail && setPpEmail(d.paypalEmail))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function connectPaypal() {
+    setPpError("");
+    setPpBusy(true);
+    try {
+      const res = await fetch("/api/paypal/vault/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: "onboarding" }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 401) {
+        setPpError("Log in first, then connect PayPal.");
+      } else if (!res.ok || !d.url) {
+        setPpError(d.error || "PayPal couldn’t be reached. Please try again.");
+      } else {
+        window.location.href = d.url;
+        return;
+      }
+    } catch {
+      setPpError("PayPal couldn’t be reached. Please try again.");
+    }
+    setPpBusy(false);
+  }
+
+  async function approvePlan() {
+    setPpError("");
+    setPpBusy(true);
+    const ids = ["cs", "bf", "rl"];
+    const items = SPLIT.map((x, i) => ({ charityId: ids[i], charityName: x.name, amountCents: Math.round((x.amt / 50) * budget * 100) }));
+    try {
+      const res = await fetch("/api/payments/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPpError(d.error || "Couldn’t save your plan. Nothing was approved.");
+        setPpBusy(false);
+        return;
+      }
+    } catch {
+      setPpError("Couldn’t save your plan. Nothing was approved.");
+      setPpBusy(false);
+      return;
+    }
+    setPpBusy(false);
+    next();
+  }
 
   // Pip "researching" ticks through its checklist while step 6 is open.
   useEffect(() => {
@@ -382,7 +444,7 @@ export default function OnboardingFlow() {
                 </span>
                 <span className="ppsandbox">Sandbox</span>
               </div>
-              <strong style={{ fontSize: 17, lineHeight: "22px" }}>Set up monthly donations from GiveWise</strong>
+              <strong style={{ fontSize: 17, lineHeight: "22px" }}>Approve your monthly plan</strong>
               <div className="pplines num">
                 {SPLIT.map((s) => (
                   <div key={s.name}>
@@ -395,16 +457,21 @@ export default function OnboardingFlow() {
                   <span>${budget.toFixed(2)}</span>
                 </div>
               </div>
-              <span style={{ fontSize: 12, lineHeight: "17px", color: "var(--muted)" }}>Paid to each charity directly, starting 1 Nov 2026. Cancel any time.</span>
+              <span style={{ fontSize: 12, lineHeight: "17px", color: "var(--muted)" }}>Paid from your PayPal to each charity directly. Nothing is sent until payment day, and you can change or stop it any time.</span>
               <div className="ppacct">
                 <span className="avatar" style={{ width: 28, height: 28, fontSize: 11, borderRadius: 999, background: "var(--accent-soft)", color: "var(--accent-ink)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 600 }}>
                   {display.slice(0, 1).toUpperCase()}
                 </span>
-                <span style={{ flex: 1 }}>you@example.com</span>
+                <span style={{ flex: 1 }}>{ppEmail ?? "Your PayPal"}</span>
                 <span style={{ color: "var(--muted)" }}>Sandbox</span>
               </div>
-              <button className="btn btn-pp btn-block" onClick={next}>
-                Agree and approve
+              {ppError && (
+                <p className="form-err" role="alert" style={{ margin: 0 }}>
+                  {ppError}
+                </p>
+              )}
+              <button className="btn btn-pp btn-block" onClick={approvePlan} disabled={ppBusy} aria-busy={ppBusy}>
+                {ppBusy ? "Saving…" : "Agree and approve"}
               </button>
               <button className="btn btn-ghost" onClick={back} style={{ alignSelf: "center" }}>
                 Cancel and go back
@@ -442,9 +509,21 @@ export default function OnboardingFlow() {
               Go to My plan
             </button>
           ) : (
-            <button className={`btn btn-block ${step === 4 ? "btn-pp" : "btn-primary"}`} onClick={next}>
-              {CTA[step]}
+            <>
+            <button
+              className={`btn btn-block ${step === 4 ? "btn-pp" : "btn-primary"}`}
+              onClick={step === 4 ? connectPaypal : next}
+              disabled={ppBusy}
+              aria-busy={ppBusy}
+            >
+              {step === 4 && ppBusy ? "Opening PayPal…" : CTA[step]}
             </button>
+            {step === 4 && ppError && (
+              <p className="form-err" role="alert" style={{ margin: 0 }}>
+                {ppError}
+              </p>
+            )}
+            </>
           )}
           {step === 6 && (
             <Link className="btn btn-block" href="/discover" style={{ fontWeight: 500 }}>

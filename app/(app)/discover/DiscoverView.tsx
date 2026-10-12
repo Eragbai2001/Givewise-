@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Pip from "@/components/Pip";
 import EmptyState from "@/components/app/EmptyState";
+import LiveSearch from "@/components/app/LiveSearch";
 import { I, Ic } from "@/components/app/icons";
 import { useDemoState } from "@/lib/demo-state";
 import { CATALOG, CAUSE_FILTERS, PIP_REASONS, hear, type Charity } from "@/lib/discover-data";
@@ -33,6 +34,7 @@ export default function DiscoverView() {
   const [budget, setBudget] = useState(50);
   const [man, setMan] = useState<Record<string, number>>({ cs: 25, bf: 15, rl: 10 });
   const [sent, setSent] = useState(false);
+  const [live, setLive] = useState<Charity[]>([]);
 
   // An existing plan starts with its charities already picked.
   useEffect(() => {
@@ -56,7 +58,7 @@ export default function DiscoverView() {
     });
   }, [q, cause, loc, verOnly, heard]);
 
-  const picked = CATALOG.filter((c) => picks.includes(c.id));
+  const picked = [...CATALOG, ...live].filter((c) => picks.includes(c.id));
   const toggle = (id: string) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   // Pip's split: known reasons for the sample set, even shares otherwise.
@@ -133,6 +135,8 @@ export default function DiscoverView() {
           </div>
         )}
       </section>
+
+      <LiveSearch query={q} picks={picks} onFound={setLive} onToggle={toggle} />
 
       <div className="fbar" role="group" aria-label="Filters">
         {CAUSE_FILTERS.map(([id, label]) => (

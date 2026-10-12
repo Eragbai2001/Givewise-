@@ -1,9 +1,9 @@
 import "server-only";
-import { DatabaseSync } from "node:sqlite";
-import { Pool } from "pg";
 import { betterAuth, type BetterAuthOptions } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { getMigrations } from "better-auth/db/migration";
+import { sendEmail } from "./email";
+import { authDatabase, ensureAppTables } from "./db";
 
 /**
  * GiveWise accounts.
@@ -14,20 +14,8 @@ import { getMigrations } from "better-auth/db/migration";
  */
 const env = process.env;
 
-function makeDatabase() {
-  const url = env.DATABASE_URL;
-  if (!url) {
-    // Node’s built-in SQLite (Node 22.13+): nothing to compile or install.
-    return new DatabaseSync(env.DATABASE_FILE ?? "givewise.db");
-  }
-  // Use Supabase's pooled connection string (port 6543) so serverless functions don't exhaust connections.
-  const clean = url.replace(/[?&]sslmode=[^&]*/g, "");
-  const local = /localhost|127\.0\.0\.1/.test(clean);
-  return new Pool({
-    connectionString: clean,
-    max: 3,
-    ssl: local ? undefined : { rejectUnauthorized: false },
-  });
+function escapeHtml(v: string) {
+  return v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
 const options = {
@@ -40,11 +28,21 @@ const options = {
     ...(env.BETTER_AUTH_URL ? [new URL(env.BETTER_AUTH_URL).origin] : []),
   ],
   secret: env.BETTER_AUTH_SECRET,
-  database: makeDatabase(),
+  database: authDatabase(),
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 10,
     autoSignIn: true,
+    resetPasswordTokenExpiresIn: 60 * 60,
+    // Awaited so serverless doesn’t freeze before the email is sent.
+    sendResetPassword: async ({ user, url }) => {
+      await sendEmail({
+        to: user.email,
+        subject: "Reset your GiveWise password",
+        text: `Hi ${user.name || "there"},\n\nUse this link to choose a new password. It works for one hour:\n${url}\n\nIf you didn’t ask for this, you can ignore this email. Nothing changes until you use the link.\n\nGiveWise`,
+        html: `<p>Hi ${escapeHtml(user.name || "there")},</p><p>Use this link to choose a new password. It works for one hour.</p><p><a href="${url}" style="display:inline-block;padding:12px 20px;background:#0B7A5A;color:#fff;border-radius:10px;text-decoration:none;font-weight:600">Choose a new password</a></p><p style="color:#555;font-size:13px">If you didn’t ask for this, you can ignore this email. Nothing changes until you use the link.</p><p>GiveWise</p>`,
+      });
+    },
   },
   socialProviders: {
     ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
@@ -87,7 +85,9 @@ export const providers = {
 // Create/upgrade the tables on first use, so there's no separate migrate step.
 let ready: Promise<void> | null = null;
 export function ensureDb() {
-  ready ??= getMigrations(options).then((m) => m.runMigrations());
+  ready ??= getMigrations(options)
+    .then((m) => m.runMigrations())
+    .then(() => ensureAppTables());
   return ready;
 }
 

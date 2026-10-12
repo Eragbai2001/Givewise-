@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Pip from "@/components/Pip";
 import { I, Ic } from "@/components/app/icons";
 import { charities as ALL_CHARITIES, payments as ALL_PAYMENTS, MONTHLY_LIMIT } from "@/lib/plan-data";
 import EmptyState from "@/components/app/EmptyState";
+import PaymentPanel from "@/components/app/PaymentPanel";
 import { useDemoState } from "@/lib/demo-state";
 
 const PER_PAGE = 6;
@@ -96,6 +97,10 @@ export default function PlanView() {
           )}
         </div>
       </div>
+
+      <Suspense>
+        <PaymentPanel />
+      </Suspense>
 
       {!hasPlan && (
         <section className="setup-card" aria-labelledby="setup-h">

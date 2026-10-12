@@ -58,7 +58,7 @@ An AI giving agent. Pip — a water-droplet mascot — finds and verifies charit
 - `app/app.css`: app shell and page styles. It uses **container queries** on `.gwapp` (1180px icon rail, 900px, 640px bottom nav).
 - App pages are deliberately **not** login-protected yet (Jaime wanted to click around freely). Add a guard only when he says so.
 
-## Payments plan (next big piece — agreed with Jaime)
+## Payments plan (BUILT, needs a Vault-enabled sandbox merchant to test end-to-end — see "Payments: what exists")
 
 Use **PayPal Vault (save payment method) + Orders v2**, not the Subscriptions API. A Subscription has a fixed price per plan, but GiveWise amounts change: split changes, one-off urgent gifts, temporary moves.
 
@@ -87,3 +87,22 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - Direct, opinionated recommendations. Short explanations in plain language.
 - Ask before big product changes. Small fixes: just do them.
 - Keep the design consistent with what's there (tokens in `globals.css`, existing classes in `app.css`). Check light and dark, desktop and phone.
+
+
+## Payments: what exists (Oct 2026)
+
+- `lib/db.ts` one DB handle (Postgres via `DATABASE_URL`, else SQLite). Our tables: `gw_payment_method`, `gw_setup_token`, `gw_plan_item`, `gw_setting`, `gw_payment`, `gw_pip_cache` (created by `ensureDb()`). Money is integer cents.
+- `lib/paypal.ts` Vault (setup token → payment token, redirect flow, no JS SDK) + Orders v2 with `vault_id`.
+- `lib/payments.ts` the money rules. Every charge inserts a PENDING row first, then checks this month's total against the hard limit, then calls PayPal (idempotent request id). Over the limit → BLOCKED, PayPal never called. Tested.
+- Routes: `POST /api/paypal/vault/start`, `GET /api/paypal/vault/return`, `GET /api/payments/status`, `POST /api/payments/{plan,run,give}`, `POST /api/paypal/webhook` (needs `PAYPAL_WEBHOOK_ID`).
+- UI: onboarding step 5 really connects PayPal; step 8 saves the plan; `components/app/PaymentPanel.tsx` on My plan has "Run payment day now".
+- **Blocker found 12 Oct:** `POST /v3/vault/setup-tokens` returns `NOT_AUTHORIZED` with the current sandbox app (plain Orders work). The sandbox business account is probably not in a Vault-supported country (Nigeria isn't). Fix: create a **US** sandbox Business account, create a new REST app on it with "Save payment methods" ticked, swap `PAYPAL_CLIENT_ID/SECRET`.
+- Charity `payee` needs a sandbox merchant email (`PAYPAL_DEMO_PAYEE_EMAIL`). Real charities need their own PayPal merchant ids, not yet collected.
+
+## Pip's research agent
+
+- `lib/pip-search.ts` + `POST /api/pip/search`: Claude (`claude-opus-5-5`, `web_search_20260209`) researches charities on the live web. Needs `ANTHROPIC_API_KEY`.
+- Trust rules are enforced in code: a proof link only counts if that exact URL appeared in the search results; confidence is recomputed (verified needs ≥2 domains incl. a registry/report/news source; the model can only lower it). Tested offline.
+- Social posts (Instagram/X) only appear if web search indexes them. We do not scrape those platforms (ToS, and unreliable).
+- Cached 6h per query (`gw_pip_cache`), 20 searches/user/hour.
+- UI: `components/app/LiveSearch.tsx` on Discover. Found charities can be added to picks.

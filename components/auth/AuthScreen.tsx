@@ -70,6 +70,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ssoNote, setSsoNote] = useState("");
+  const [notice, setNotice] = useState("");
 
   const pwScore = strength(password);
 
@@ -88,6 +89,7 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   useEffect(() => {
     fetchMe().then((r) => setProviders(r.providers));
     const err = params.get("error");
+    if (params.get("reset")) setNotice("Password changed. Log in with your new password.");
     if (err) {
       setFormError(
         err === "account_not_linked"
@@ -217,6 +219,11 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
           <div className="or">or with email</div>
 
           <form className="stack" onSubmit={onSubmit} noValidate>
+            {notice && !formError && (
+              <p className="soon" role="status" style={{ marginTop: 0 }}>
+                {notice}
+              </p>
+            )}
             {formError && (
               <p className="form-err" role="alert">
                 {formError}
