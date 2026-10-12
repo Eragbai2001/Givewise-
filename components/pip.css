@@ -1,0 +1,51 @@
+/* Pip — GiveWise mascot */
+.pip{display:block;overflow:visible}
+.pip .body{fill:#2A8C82}
+.pip .hl{fill:#FFFFFF;opacity:.38}
+.pip .hl2{fill:#FFFFFF;opacity:.55}
+.pip .shadow{fill:#2B2724;opacity:.08}
+.pip .cheek{fill:#F2A68C;opacity:.55}
+.pip .eyewhite{fill:#FFFFFF}
+.pip .pupil{fill:#1E2B2A}
+.pip .glint{fill:#FFFFFF}
+.pip .line{fill:none;stroke:#1E2B2A;stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.pip .brow{fill:none;stroke:#1E2B2A;stroke-width:3;stroke-linecap:round}
+.pip .mouthfill{fill:#1E2B2A}
+.pip .tongue{fill:#E98E7A}
+.pip .limb{fill:none;stroke:#2A8C82;stroke-width:7;stroke-linecap:round}
+.pip .hand{fill:#2A8C82}
+.pip .lens{fill:#FFFFFF;fill-opacity:.35;stroke:#4A4540;stroke-width:4}
+.pip .handle{stroke:#4A4540;stroke-width:6;stroke-linecap:round}
+.pip .paper{fill:#FFFFFF;stroke:#CFC8BF;stroke-width:2}
+.pip .paperline{fill:none;stroke:#CFC8BF;stroke-width:2.4;stroke-linecap:round}
+.pip .sound{fill:none;stroke:#7FC4BB;stroke-width:3;stroke-linecap:round}
+.pip .bubble{fill:#E1F0ED}
+.pip .qmark{fill:#0F5E5A;font:700 17px var(--font-geist-sans),ui-sans-serif,system-ui,sans-serif;text-anchor:middle}
+.pip .spark{fill:#7FC4BB}
+.pip .c1{fill:#2A8C82}.pip .c2{fill:#E3B25C}.pip .c3{fill:#7FC4BB}.pip .c4{fill:#E9A38F}
+.pip .anim-breathe{animation:pipBreathe 4s ease-in-out infinite;transform-origin:80px 148px}
+.pip .anim-sway{animation:pipSway 3.2s ease-in-out infinite;transform-origin:80px 148px}
+.pip .anim-hop{animation:pipHop 1.8s ease-in-out infinite;transform-origin:80px 148px}
+.pip .anim-tilt{animation:pipTilt 4.5s ease-in-out infinite;transform-origin:80px 148px}
+.pip .anim-blink{animation:pipBlink 5s ease-in-out infinite;transform-origin:80px 98px}
+.pip .anim-paper1{animation:pipPaper 2.6s ease-in-out infinite;transform-origin:30px 110px}
+.pip .anim-paper2{animation:pipPaper 2.6s ease-in-out infinite reverse;transform-origin:40px 110px}
+.pip .anim-scan{animation:pipScan 2.2s ease-in-out infinite}
+.pip .anim-pulse{animation:pipPulse 1.6s ease-in-out infinite}
+.pip .anim-float{animation:pipFloat 3s ease-in-out infinite}
+.pip .anim-twinkle{animation:pipTwinkle 1.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.pip .anim-fall{animation:pipFall 2.4s ease-in infinite}
+.pip .d1{animation-delay:.3s}.pip .d2{animation-delay:.7s}.pip .d3{animation-delay:1.1s}.pip .d4{animation-delay:1.5s}
+@keyframes pipBreathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.025,.975)} }
+@keyframes pipSway{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(2deg)} }
+@keyframes pipHop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-7px)} }
+@keyframes pipTilt{0%,100%{transform:rotate(0deg)}50%{transform:rotate(3deg)} }
+@keyframes pipBlink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.1)} }
+@keyframes pipPaper{0%,100%{transform:rotate(0deg) translateY(0)}50%{transform:rotate(-5deg) translateY(-3px)} }
+@keyframes pipScan{0%,100%{transform:translate(0,0)}50%{transform:translate(-5px,2px)} }
+@keyframes pipPulse{0%,100%{opacity:.25}50%{opacity:1} }
+@keyframes pipFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)} }
+@keyframes pipTwinkle{0%,100%{transform:scale(.6);opacity:.4}50%{transform:scale(1);opacity:1} }
+@keyframes pipFall{0%{transform:translateY(-8px);opacity:0}15%{opacity:1}100%{transform:translateY(26px);opacity:0} }
+.pip.still *{animation:none !important}
+@media (prefers-reduced-motion: reduce){ .pip *{animation:none !important} }
