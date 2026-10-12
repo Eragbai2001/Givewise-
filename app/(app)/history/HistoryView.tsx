@@ -5,8 +5,9 @@ import { useMemo, useState } from "react";
 import EmptyState from "@/components/app/EmptyState";
 import { I, Ic } from "@/components/app/icons";
 import { useDemoState, type DemoState } from "@/lib/demo-state";
+import { usePayments, type RealPayment } from "@/lib/use-payments";
 
-type Row = { t: "pay" | "you" | "pip"; date: string; what: string; charity: string; by: string; amount: string; status: string; chip: string; receipt?: boolean };
+type Row = { t: "pay" | "you" | "pip"; date: string; what: string; charity: string; by: string; amount: string; status: string; chip: string; receipt?: boolean; ref?: string | null };
 
 const pay = (date: string, charity: string, amount: string): Row => ({ t: "pay", date, what: "Monthly gift", charity, by: "PayPal sandbox", amount, status: "Paid", chip: "ok", receipt: true });
 
@@ -39,18 +40,45 @@ function buildRows(state: DemoState): Row[] {
 }
 
 const PER = 10;
+
+const STATUS: Record<string, [string, string]> = {
+  COMPLETED: ["Paid", "ok"],
+  PENDING: ["Pending", "rev"],
+  FAILED: ["Failed", "conf-n"],
+  BLOCKED: ["Stopped by your limit", "conf-n"],
+};
+
+/** The donor's real payments from the server, shaped like the designed rows. */
+function realRows(payments: RealPayment[]): Row[] {
+  return payments.map((p) => {
+    const [status, chip] = STATUS[p.status] ?? [p.status, "neutral"];
+    return {
+      t: "pay" as const,
+      date: new Date(p.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+      what: p.kind === "one-off" ? "One-off gift" : "Monthly gift",
+      charity: p.charityName,
+      by: "PayPal sandbox",
+      amount: `$${(p.amountCents / 100).toFixed(2)}`,
+      status,
+      chip,
+      ref: p.orderId,
+    };
+  });
+}
 const FILTER = ["M22 3H2l8 9.46V19l4 2v-8.54L22 3z"];
 const SORT = ["M7 4v16", "M3 8l4-4 4 4", "M17 20V4", "M13 16l4 4 4-4"];
 const STATEMENT = ["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6", "M12 18v-6", "M9 15l3 3 3-3"];
 
 export default function HistoryView() {
   const { state } = useDemoState();
+  const { status } = usePayments();
+  const real = state === "full" && status !== null;
   const [q, setQ] = useState("");
   const [type, setType] = useState("all");
   const [page, setPage] = useState(1);
   const [newestFirst, setNewestFirst] = useState(true);
 
-  const all = useMemo(() => buildRows(state), [state]);
+  const all = useMemo(() => (real && status ? realRows(status.payments) : buildRows(state)), [state, real, status]);
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
     const f = all.filter((r) => (type === "all" || r.t === type) && (!t || `${r.what} ${r.charity} ${r.by}`.toLowerCase().includes(t)));
@@ -88,7 +116,7 @@ export default function HistoryView() {
         )}
       </div>
 
-      {state === "empty" ? (
+      {state === "empty" || (real && all.length === 0) ? (
         <section className="card">
           <EmptyState
             icon={I.file}
@@ -141,7 +169,7 @@ export default function HistoryView() {
                     <td style={{ color: "var(--text2)" }}>{r.by}</td>
                     <td className="num" style={{ textAlign: "right", fontWeight: 600 }}>{r.amount}</td>
                     <td><span className={`chip ${r.chip}`}><i />{r.status}</span></td>
-                    <td>{r.receipt ? <a className="src" href="#" aria-label={`Download receipt for ${r.charity}, ${r.date}`}>PDF</a> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
+                    <td>{r.receipt ? <a className="src" href="#" aria-label={`Download receipt for ${r.charity}, ${r.date}`}>PDF</a> : r.ref ? <span className="num" style={{ fontSize: 12, color: "var(--text2)" }}>{r.ref}</span> : <span style={{ color: "var(--muted)" }}>—</span>}</td>
                   </tr>
                 ))}
               </tbody>
@@ -153,6 +181,7 @@ export default function HistoryView() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><span style={{ fontWeight: 500 }}>{r.what}</span><span className="num" style={{ fontWeight: 600 }}>{r.amount}</span></div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}><span className="num" style={{ fontSize: 12, color: "var(--muted)" }}>{r.date} · {r.charity}</span><span className={`chip ${r.chip}`}><i />{r.status}</span></div>
                 {r.receipt && <a className="src" href="#" style={{ alignSelf: "flex-start" }}>Download receipt</a>}
+                {r.ref && <span className="num" style={{ fontSize: 12, color: "var(--muted)" }}>PayPal order {r.ref}</span>}
               </div>
             ))}
           </div>

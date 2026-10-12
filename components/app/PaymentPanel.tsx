@@ -22,7 +22,7 @@ const STATUS_CHIP: Record<string, string> = { COMPLETED: "ok", FAILED: "conf-n",
 const STATUS_TEXT: Record<string, string> = { COMPLETED: "Sent", FAILED: "Failed", BLOCKED: "Stopped by your limit", PENDING: "Pending", SKIPPED: "Skipped" };
 
 /** Real PayPal connection + "run payment day now" (sandbox). Everything here calls the server; the server enforces the limit. */
-export default function PaymentPanel() {
+export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) {
   const params = useSearchParams();
   const [s, setS] = useState<Status | null>(null);
   const [loggedOut, setLoggedOut] = useState(false);
@@ -63,12 +63,13 @@ export default function PaymentPanel() {
     else setError(d?.error || "Payment day couldn’t run. Nothing was sent.");
     setBusy("");
     load();
+    onChanged?.();
   }
 
   if (loggedOut) {
     return (
-      <section className="card" aria-labelledby="pay-h">
-        <div className="card-h"><h2 id="pay-h">PayPal</h2><span className="meta">Log in to connect</span></div>
+      <section className="card" aria-labelledby="paypal-h">
+        <div className="card-h"><h2 id="paypal-h">PayPal</h2><span className="meta">Log in to connect</span></div>
         <div className="card-b"><p style={{ margin: 0 }}>Log in to connect PayPal and run payments.</p></div>
       </section>
     );
@@ -79,9 +80,9 @@ export default function PaymentPanel() {
   const over = planTotal > s.hardLimitCents;
 
   return (
-    <section className="card" aria-labelledby="pay-h">
+    <section className="card" aria-labelledby="paypal-h">
       <div className="card-h">
-        <h2 id="pay-h">PayPal &amp; payment day</h2>
+        <h2 id="paypal-h">PayPal &amp; payment day</h2>
         <span className="meta">{s.env === "sandbox" ? "Sandbox · no real money" : "Live"}</span>
       </div>
       <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
