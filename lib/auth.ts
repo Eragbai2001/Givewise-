@@ -56,6 +56,9 @@ const options = {
             clientId: env.PAYPAL_CLIENT_ID,
             clientSecret: env.PAYPAL_CLIENT_SECRET,
             environment: env.PAYPAL_ENV === "live" ? ("live" as const) : ("sandbox" as const),
+            // Better Auth's PayPal provider sends no `scope`, and PayPal rejects that.
+            // Put it in the authorize URL ourselves (matches Full name + Email in the PayPal app).
+            authorizationEndpoint: `https://www.${env.PAYPAL_ENV === "live" ? "" : "sandbox."}paypal.com/signin/authorize?scope=${encodeURIComponent("openid profile email")}`,
           },
         }
       : {}),
