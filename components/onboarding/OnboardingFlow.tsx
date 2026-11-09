@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import Pip from "../Pip";
 import { PipLogo } from "../Pip";
 import ThemeToggle from "../ThemeToggle";
+import TestLoginNote, { type TestLogin } from "../TestLoginNote";
 import { markOnboarded } from "@/lib/onboarding";
 
 const CAUSES = [
@@ -74,6 +75,16 @@ export default function OnboardingFlow() {
   const [ppBusy, setPpBusy] = useState(false);
   const [ppError, setPpError] = useState("");
   const [ppEmail, setPpEmail] = useState<string | null>(null);
+  const [testLogin, setTestLogin] = useState<TestLogin | null>(null);
+
+  // Sandbox: fetch the fake PayPal login to show on the Connect PayPal step.
+  useEffect(() => {
+    if (step !== 4 || testLogin) return;
+    fetch("/api/payments/status")
+      .then((x) => (x.ok ? x.json() : null))
+      .then((d) => d?.testLogin && setTestLogin(d.testLogin))
+      .catch(() => {});
+  }, [step, testLogin]);
 
   // Coming back from PayPal: continue after a good approval, or explain what happened.
   useEffect(() => {
@@ -352,6 +363,7 @@ export default function OnboardingFlow() {
             <p className="setup-hint" style={{ marginTop: 0 }}>
               No bank connection needed. You can disconnect any time in Settings.
             </p>
+            <TestLoginNote login={testLogin} />
           </>
         )}
 

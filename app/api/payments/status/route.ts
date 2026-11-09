@@ -11,10 +11,15 @@ export async function GET(req: Request) {
     recentPayments(user.id),
     givenThisMonth(user.id),
   ]);
+  const sandbox = process.env.PAYPAL_ENV !== "live";
+  const testEmail = process.env.PAYPAL_TEST_BUYER_EMAIL;
+  const testPassword = process.env.PAYPAL_TEST_BUYER_PASSWORD;
   return Response.json({
     connected: Boolean(connection),
     paypalEmail: connection?.email ?? null,
-    env: process.env.PAYPAL_ENV === "live" ? "live" : "sandbox",
+    env: sandbox ? "sandbox" : "live",
+    // Fake-money login for judges. Never sent in live mode.
+    testLogin: sandbox && testEmail && testPassword ? { email: testEmail, password: testPassword } : null,
     hardLimitCents: limits.hardLimitCents,
     oneOffLimitCents: limits.oneOffLimitCents,
     givenThisMonthCents: given,

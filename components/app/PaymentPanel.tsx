@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { I, Ic } from "@/components/app/icons";
+import TestLoginNote, { type TestLogin } from "@/components/TestLoginNote";
 
 type Payment = { id: string; charityName: string; amountCents: number; kind: string; status: string; orderId: string | null; error: string | null; createdAt: string };
 type Status = {
   connected: boolean;
   paypalEmail: string | null;
   env: "sandbox" | "live";
+  testLogin: TestLogin | null;
   hardLimitCents: number;
   givenThisMonthCents: number;
   planSaved: boolean;
@@ -98,6 +100,7 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
                 {busy === "connect" ? "Opening PayPal…" : "Connect PayPal"}
               </button>
             </div>
+            <TestLoginNote login={s.testLogin} />
           </>
         ) : (
           <>
