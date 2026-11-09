@@ -122,5 +122,7 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - Pushed to GitHub `main`; Vercel deploys from it. `ANTHROPIC_API_KEY` goes in Vercel's environment variables only (the dev laptop is a public PC: no `.env.local` is kept on it). Needs a redeploy after adding.
 - Submission checklist: MIT `LICENSE` added; README is judge-ready but still has `TODO`s (live URL, YouTube link, PayPal sandbox buyer login, optional GiveWise test account).
 - `next build` stops once on a Next.js security notice (it passes when run again). Upgrade Next.js if the Vercel build fails.
-- Still sample data (labelled): Discover's built-in catalogue, Impact, Pip's weekly check on My plan, the example cards on Pip's suggestions.
+- Still sample data (labelled): Impact, Pip's weekly check on My plan, the example cards on Pip's suggestions.
+- **Only charities Pip found (ids starting `live-`) can be in a plan or be paid.** `savePlan`, `runPaymentDay` and `giveOnce` refuse anything else (`isRealCharity` in `lib/payments.ts`). The sample plan (`SAMPLE_PLAN`) is display-only; the PayPal card shows "Find charities with Pip" until a real plan is saved.
+- Discover opens with Pip's live search. The made-up catalogue (`lib/discover-data.ts`) is hidden behind "Show example charities (sample data)", marked "Sample · not real", with no Verified labels, links or Add-to-picks. Onboarding's sample split can't be approved (the button becomes "Ask Pip to search again").
 - In sandbox every gift goes to `PAYPAL_DEMO_PAYEE_EMAIL`, not the real charity. Real payouts need verified charity PayPal accounts (or PayPal Giving Fund).

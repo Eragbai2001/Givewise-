@@ -61,7 +61,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const usd = (c: number) => `$${Number.isInteger(c / 100) ? c / 100 : (c / 100).toFixed(2)}`;
   const limitC = status?.hardLimitCents ?? 5000;
   const givenC = status?.givenThisMonthCents ?? 0;
-  const plannedC = (status?.plan ?? []).reduce((t, i) => t + i.amountCents, 0);
+  const plannedC = status?.planSaved ? status.plan.reduce((t, i) => t + i.amountCents, 0) : 0;
   const pct = Math.min(100, Math.round((givenC / limitC) * 100));
   const initials = (me?.name || "Ada Lewis").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const logout = async (e: React.MouseEvent) => {

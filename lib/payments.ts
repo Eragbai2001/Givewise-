@@ -98,7 +98,13 @@ export async function getPlan(userId: string) {
   };
 }
 
+/** Charities Pip found on the web have ids starting "live-". Everything else is made-up sample data. */
+export const isRealCharity = (charityId: string) => charityId.startsWith("live-");
+
 export async function savePlan(userId: string, items: { charityId: string; charityName: string; amountCents: number; payeeEmail?: string | null }[]) {
+  if (items.some((i) => !isRealCharity(i.charityId))) {
+    throw new LimitError("Only charities Pip found and checked can be in your plan. Sample charities can’t be paid.");
+  }
   const { hardLimitCents } = await getLimits(userId);
   const total = items.reduce((s, i) => s + i.amountCents, 0);
   if (total > hardLimitCents) {
@@ -192,6 +198,10 @@ export async function runPaymentDay(userId: string, opts: { dedupe: boolean }) {
   await releaseStalePending(userId);
   const { hardLimitCents } = await getLimits(userId);
   const plan = await getPlan(userId);
+  // The sample plan is only for show. Never pay it, or a plan that still holds sample charities.
+  if (!plan.saved || plan.items.some((i) => !isRealCharity(i.charityId))) {
+    throw new LimitError("Approve a plan with charities Pip found first. Sample charities are never paid.");
+  }
 
   const planTotal = plan.items.reduce((s, i) => s + i.amountCents, 0);
   if (planTotal > hardLimitCents) {
@@ -218,6 +228,7 @@ export async function runPaymentDay(userId: string, opts: { dedupe: boolean }) {
 
 /** An extra one-off gift (e.g. an urgent appeal). Checked against the one-off limit and the monthly hard limit. */
 export async function giveOnce(userId: string, item: { charityId: string; charityName: string; amountCents: number; payeeEmail?: string | null }) {
+  if (!isRealCharity(item.charityId)) throw new LimitError("Sample charities can’t be paid.");
   const conn = await getConnection(userId);
   if (!conn) throw new LimitError("Connect PayPal first. Nothing can be sent until you approve it.");
   await releaseStalePending(userId);

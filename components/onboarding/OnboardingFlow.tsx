@@ -656,11 +656,11 @@ export default function OnboardingFlow() {
             <>
             <button
               className={`btn btn-block ${step === 4 ? "btn-pp" : "btn-primary"}`}
-              onClick={step === 4 ? connectPaypal : next}
+              onClick={step === 4 ? connectPaypal : step === 6 && sample ? () => { setSplit(null); setStep(5); } : next}
               disabled={ppBusy}
               aria-busy={ppBusy}
             >
-              {step === 4 && ppBusy ? "Opening PayPal…" : CTA[step]}
+              {step === 4 && ppBusy ? "Opening PayPal…" : step === 6 && sample ? "Ask Pip to search again" : CTA[step]}
             </button>
             {step === 4 && ppError && (
               <p className="form-err" role="alert" style={{ margin: 0 }}>

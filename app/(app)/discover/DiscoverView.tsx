@@ -7,7 +7,7 @@ import EmptyState from "@/components/app/EmptyState";
 import LiveSearch from "@/components/app/LiveSearch";
 import { I, Ic } from "@/components/app/icons";
 import { useDemoState } from "@/lib/demo-state";
-import { CATALOG, CAUSE_FILTERS, PIP_REASONS, hear, type Charity } from "@/lib/discover-data";
+import { CATALOG, PIP_REASONS, hear, type Charity } from "@/lib/discover-data";
 import { paymentsChanged, usePayments } from "@/lib/use-payments";
 
 const PIN = ["M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z", "M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"];
@@ -16,18 +16,10 @@ const PEN = ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"];
 const ALERT = ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 8v4", "M12 16h.01"];
 const ARROW = ["M5 12h14", "M12 5l7 7-7 7"];
 
-function VerChip({ v }: { v: Charity["ver"] }) {
-  if (v === "v") return <span className="chip ok"><Ic d={I.check} style={{ width: 12, height: 12 }} />Verified charity</span>;
-  if (v === "p") return <span className="chip rev"><i />Partly verified</span>;
-  return <span className="chip conf-n">Couldn’t verify</span>;
-}
-
 export default function DiscoverView() {
   const { state } = useDemoState();
   const [q, setQ] = useState("");
-  const [cause, setCause] = useState("all");
-  const [loc, setLoc] = useState("any");
-  const [verOnly, setVerOnly] = useState(false);
+  const [showExamples, setShowExamples] = useState(false);
   const [picks, setPicks] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"pip" | "manual">("pip");
@@ -49,38 +41,24 @@ export default function DiscoverView() {
   useEffect(() => {
     if (state === "full" && status?.planSaved) {
       const extras = status.plan
-        .filter((i) => !CATALOG.some((c) => c.id === i.charityId))
+        .filter((i) => i.charityId.startsWith("live-"))
         .map((i): Charity => {
           const w = i.charityName.split(/\s+/);
           return { id: i.charityId, name: i.charityName, ini: ((w[0]?.[0] ?? "?") + (w[1]?.[0] ?? "")).toUpperCase(), cause: "local", causeLabel: "In your plan", place: "Found by Pip", region: "af", ver: "p", tint: "var(--grey-soft)", ink: "var(--grey-ink)", color: "#5E7FA3" };
         });
       setPlanExtras(extras);
-      setPicks(status.plan.map((i) => i.charityId));
+      setPicks(status.plan.filter((i) => i.charityId.startsWith("live-")).map((i) => i.charityId));
       setMan(Object.fromEntries(status.plan.map((i) => [i.charityId, i.amountCents / 100])));
       setBudget(status.hardLimitCents / 100);
       return;
     }
-    setPicks(state === "empty" ? [] : ["cs", "bf", "rl"]);
-    setMan(state === "empty" ? {} : { cs: 25, bf: 15, rl: 10 });
+    setPicks([]);
+    setMan({});
   }, [state, status?.planSaved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const heard = useMemo(() => hear(q), [q]);
-  const results = useMemo(() => {
-    const t = q.trim().toLowerCase();
-    const region = loc !== "any" ? loc : heard.region;
-    return CATALOG.filter((c) => {
-      if (cause !== "all") {
-        if (c.cause !== cause) return false;
-      } else if (heard.causes.length) {
-        if (!heard.causes.includes(c.cause)) return false;
-      } else if (t && !c.name.toLowerCase().includes(t) && !c.place.toLowerCase().includes(t)) return false;
-      if (region === "ng" && c.region !== "ng") return false;
-      if (verOnly && c.ver !== "v") return false;
-      return true;
-    });
-  }, [q, cause, loc, verOnly, heard]);
 
-  const picked = [...CATALOG, ...live, ...planExtras.filter((e) => !live.some((l) => l.id === e.id))].filter((c) => picks.includes(c.id));
+  const picked = [...live, ...planExtras.filter((e) => !live.some((l) => l.id === e.id))].filter((c) => picks.includes(c.id));
   const toggle = (id: string) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   // Pip's split: known reasons for the sample set, even shares otherwise.
@@ -138,7 +116,6 @@ export default function DiscoverView() {
     };
   }, [open]);
 
-  const forText = heard.heard.length && cause === "all" ? heard.heard.join(" · ") : CAUSE_FILTERS.find((d) => d[0] === cause)?.[1] ?? "All causes";
 
   return (
     <main className="content">
@@ -163,7 +140,7 @@ export default function DiscoverView() {
         <label className="askbox">
           <Ic d={I.search} small={false} style={{ color: "var(--muted)" }} />
           <span className="sr-only">Search charities or describe a cause</span>
-          <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setCause("all"); }} placeholder="e.g. girls’ education in Nigeria, or a charity’s name" />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. girls’ education in Nigeria, or a charity’s name" />
           {q && (
             <button className="iconbtn sq" onClick={() => setQ("")} aria-label="Clear search" style={{ borderColor: "transparent", background: "transparent" }}>
               <Ic d={I.close} />
@@ -182,94 +159,59 @@ export default function DiscoverView() {
 
       <LiveSearch query={q} picks={picks} onFound={setLive} onToggle={toggle} />
 
-      <div className="fbar" role="group" aria-label="Filters">
-        {CAUSE_FILTERS.map(([id, label]) => (
-          <button key={id} className={`fchip ${cause === id ? "on" : ""}`} aria-pressed={cause === id} onClick={() => setCause(id)}>
-            {label}
-          </button>
-        ))}
-        <span style={{ flex: 1 }} />
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--text2)" }}>
-          Location
-          <select value={loc} onChange={(e) => setLoc(e.target.value)} style={{ font: "inherit", fontSize: 13, minHeight: 34, paddingLeft: 12, borderRadius: 9, border: "1px solid var(--line2)", background: "var(--surface)", color: "var(--text)" }}>
-            <option value="any">Anywhere</option>
-            <option value="ng">Nigeria</option>
-          </select>
-        </label>
-        <label className="toggle">
-          <input type="checkbox" checked={verOnly} onChange={(e) => setVerOnly(e.target.checked)} />
-          Verified only
-        </label>
-      </div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <Pip mood="idle" size={36} motion={false} decorative />
-        <p role="status" style={{ margin: 0, flex: 1, minWidth: 200, color: "var(--text2)" }}>
-          <b style={{ fontWeight: 600, color: "var(--text)" }}>
-            {results.length} {results.length === 1 ? "charity" : "charities"}
-          </b>{" "}
-          for {forText}
-        </p>
-        <span style={{ fontSize: 12, color: "var(--muted)" }}>Sorted by best match</span>
-      </div>
-
-      {results.length === 0 ? (
+      {q.trim().length < 3 && (
         <section className="card">
           <EmptyState
-            mood="researching"
-            title="No charities match yet"
-            body={verOnly ? "Try turning off “Verified only” to see charities Pip couldn’t fully check, or use a broader cause." : "Try a broader cause or a different place. Pip is adding new charities every week."}
+            mood="listening"
+            title="Tell Pip what you care about"
+            body="Type a cause and a place, like “rescue dogs in Lagos”. Pip searches the live web and shows only charities it can back with sources you can open."
             action={
-              <button className="btn btn-sm" onClick={() => { setQ(""); setCause("all"); setLoc("any"); setVerOnly(false); }}>
-                Clear filters
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                {["Clean water in Nigeria", "Girls’ education in Kano", "Rescue dogs in Lagos", "Food banks in Abuja"].map((t) => (
+                  <button key={t} className="fchip" onClick={() => setQ(t)}>{t}</button>
+                ))}
+              </div>
             }
           />
         </section>
-      ) : (
-        <div className="results">
-          {results.map((c) => {
-            const on = picks.includes(c.id);
-            return (
-              <article key={c.id} className={`ccard ${on ? "picked" : ""}`} aria-label={c.name}>
-                <div className="top">
-                  <span className="logo-ph" style={{ background: c.tint, color: c.ink }}>{c.ini}</span>
-                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-                    <h3>{c.name}</h3>
-                    <span className="loc"><Ic d={PIN} style={{ width: 12, height: 12 }} />{c.place}</span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                  <span className="chip neutral">{c.causeLabel}</span>
-                  <VerChip v={c.ver} />
-                  {c.funded && <span className="chip neutral"><i />Project funded</span>}
-                </div>
-                {c.outcome ? (
-                  <div className="outcome">
-                    <span>{c.outcome}</span>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "center" }}>
-                      {c.outcomeVer === "v" ? <span className="chip ok">Verified</span> : <span className="chip rev">Partly verified</span>}
-                      <a className="src" href="#">{c.src}</a>
+      )}
+
+      {/* Made-up charities from the design phase. Hidden unless asked for, and clearly marked. */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setShowExamples((v) => !v)} aria-expanded={showExamples}>
+          {showExamples ? "Hide example charities" : "Show example charities (sample data)"}
+        </button>
+        {showExamples && (
+          <>
+            <div className="banner" role="note">
+              <span className="bdot" aria-hidden="true" />
+              <p><b>Sample data · not real charities.</b><span className="hide-m"> These show how a charity card looks. They can’t be added to a plan or paid.</span></p>
+            </div>
+            <div className="results">
+              {CATALOG.map((c) => (
+                <article key={c.id} className="ccard" aria-label={`${c.name} (sample)`}>
+                  <div className="top">
+                    <span className="logo-ph" style={{ background: c.tint, color: c.ink }}>{c.ini}</span>
+                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                      <h3>{c.name}</h3>
+                      <span className="loc"><Ic d={PIN} style={{ width: 12, height: 12 }} />{c.place}</span>
                     </div>
                   </div>
-                ) : (
-                  <div className="outcome" style={{ borderStyle: "dashed", flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Pip mood="concerned" size={28} motion={false} decorative />
-                    <span>No published results I could check yet.</span>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                    <span className="chip neutral">{c.causeLabel}</span>
+                    <span className="chip none">Sample · not real</span>
                   </div>
-                )}
-                <div className="foot2">
-                  <a className="src" href="#" style={{ color: "var(--muted)" }}>View profile</a>
-                  <button className={`btn btn-sm ${on ? "added" : ""}`} onClick={() => toggle(c.id)} aria-pressed={on}>
-                    <Ic d={on ? I.check : PLUS} />
-                    {on ? "Picked" : "Add to picks"}
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
+                  {c.outcome && (
+                    <div className="outcome">
+                      <span>{c.outcome}</span>
+                    </div>
+                  )}
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
 
       {picked.length > 0 && (
         <div className="tray" role="region" aria-label="Your picks">

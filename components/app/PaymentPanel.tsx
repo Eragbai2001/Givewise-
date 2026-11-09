@@ -87,6 +87,8 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
   const due = s.plan.filter((i) => !s.paidCharityIds.includes(i.charityId));
   const dueTotal = due.reduce((t, i) => t + i.amountCents, 0);
   const allPaid = s.plan.length > 0 && due.length === 0;
+  // Only a saved plan of charities Pip found can be paid. The sample plan is for show.
+  const realPlan = s.planSaved && s.plan.every((i) => i.charityId.startsWith("live-"));
   // Money left under this month's limit. If the rest of the plan doesn't fit, it waits for next month.
   const noRoom = !allPaid && s.givenThisMonthCents > 0 && dueTotal > s.hardLimitCents - s.givenThisMonthCents;
   const now = new Date();
@@ -135,7 +137,12 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
 
             {/* Right: what happens next */}
             <div className="pp-right">
-              {allPaid ? (
+              {!realPlan ? (
+                <>
+                  <Link className="btn btn-primary" href="/discover">Find charities with Pip</Link>
+                  <span className="pp-sub">Payment day starts once you approve a plan of charities Pip found. Nothing is paid until then.</span>
+                </>
+              ) : allPaid ? (
                 <>
                   <span className="pp-status"><Ic d={I.check} />{thisMonth} is done</span>
                   <span className="pp-sub">Every charity in your plan is paid. Next payment day: <b>{nextDay}</b>.</span>
