@@ -8,8 +8,8 @@ import LiveSearch from "@/components/app/LiveSearch";
 import { I, Ic } from "@/components/app/icons";
 import { useDemoState } from "@/lib/demo-state";
 import { CATALOG, CAUSE_FILTERS, PIP_REASONS, hear, type Charity } from "@/lib/discover-data";
+import { paymentsChanged, usePayments } from "@/lib/use-payments";
 
-const LIMIT = 50;
 const PIN = ["M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z", "M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"];
 const PLUS = ["M12 5v14", "M5 12h14"];
 const PEN = ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"];
@@ -35,12 +35,34 @@ export default function DiscoverView() {
   const [man, setMan] = useState<Record<string, number>>({ cs: 25, bf: 15, rl: 10 });
   const [sent, setSent] = useState(false);
   const [live, setLive] = useState<Charity[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
+
+  // The donor's real limit and saved plan (null when logged out or still loading).
+  const { status } = usePayments();
+  const LIMIT = status ? status.hardLimitCents / 100 : 50;
+
+  // Charities in the saved plan that aren't in the catalogue (e.g. ones Pip found on the web).
+  const [planExtras, setPlanExtras] = useState<Charity[]>([]);
 
   // An existing plan starts with its charities already picked.
   useEffect(() => {
+    if (state === "full" && status?.planSaved) {
+      const extras = status.plan
+        .filter((i) => !CATALOG.some((c) => c.id === i.charityId))
+        .map((i): Charity => {
+          const w = i.charityName.split(/\s+/);
+          return { id: i.charityId, name: i.charityName, ini: ((w[0]?.[0] ?? "?") + (w[1]?.[0] ?? "")).toUpperCase(), cause: "local", causeLabel: "In your plan", place: "Found by Pip", region: "af", ver: "p", tint: "var(--grey-soft)", ink: "var(--grey-ink)", color: "#5E7FA3" };
+        });
+      setPlanExtras(extras);
+      setPicks(status.plan.map((i) => i.charityId));
+      setMan(Object.fromEntries(status.plan.map((i) => [i.charityId, i.amountCents / 100])));
+      setBudget(status.hardLimitCents / 100);
+      return;
+    }
     setPicks(state === "empty" ? [] : ["cs", "bf", "rl"]);
     setMan(state === "empty" ? {} : { cs: 25, bf: 15, rl: 10 });
-  }, [state]);
+  }, [state, status?.planSaved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const heard = useMemo(() => hear(q), [q]);
   const results = useMemo(() => {
@@ -58,7 +80,7 @@ export default function DiscoverView() {
     });
   }, [q, cause, loc, verOnly, heard]);
 
-  const picked = [...CATALOG, ...live].filter((c) => picks.includes(c.id));
+  const picked = [...CATALOG, ...live, ...planExtras.filter((e) => !live.some((l) => l.id === e.id))].filter((c) => picks.includes(c.id));
   const toggle = (id: string) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   // Pip's split: known reasons for the sample set, even shares otherwise.
@@ -80,6 +102,28 @@ export default function DiscoverView() {
   const over = total > budget;
   const bad = overLimit || over || total === 0;
   const left = budget - total;
+
+  /** Save the split as the donor's plan. The server re-checks it against their hard limit. */
+  async function approve() {
+    setSaveErr("");
+    setSaving(true);
+    const items = picked
+      .filter((c) => amtOf(c.id) > 0)
+      .map((c) => ({ charityId: c.id, charityName: c.name, amountCents: Math.round(amtOf(c.id) * 100) }));
+    try {
+      const r = await fetch("/api/payments/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) setSaveErr("Log in to save your plan.");
+      else if (!r.ok) setSaveErr(d.error || "Couldn’t save your plan. Nothing changed.");
+      else {
+        setSent(true);
+        paymentsChanged();
+      }
+    } catch {
+      setSaveErr("GiveWise couldn’t be reached. Nothing changed.");
+    }
+    setSaving(false);
+  }
 
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -240,7 +284,7 @@ export default function DiscoverView() {
             </strong>
             <span style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{picked.map((c) => c.name).join(", ")}</span>
           </div>
-          <button className="btn btn-primary btn-lg" onClick={() => { setSent(false); setOpen(true); }}>
+          <button className="btn btn-primary btn-lg" onClick={() => { setSent(false); setSaveErr(""); setOpen(true); }}>
             Share my ${budget}
             <Ic d={ARROW} />
           </button>
@@ -253,9 +297,9 @@ export default function DiscoverView() {
             {sent ? (
               <div className="empty" style={{ padding: "40px 24px" }}>
                 <Pip mood="celebrating" size={110} />
-                <strong style={{ fontSize: 18 }}>Sent to PayPal for your approval</strong>
+                <strong style={{ fontSize: 18 }}>Your new plan is saved</strong>
                 <p>
-                  ${total} a month across {picked.filter((c) => amtOf(c.id) > 0).length} charities. Nothing changes until you approve it in PayPal sandbox. New amounts start with your next payment.
+                  ${total} a month across {picked.filter((c) => amtOf(c.id) > 0).length} charities. Nothing was charged now. The new amounts go out on your next payment day, from the PayPal you already approved.
                 </p>
                 <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                   <button className="btn" onClick={() => setOpen(false)}>Keep browsing</button>
@@ -392,10 +436,11 @@ export default function DiscoverView() {
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
                       <button className="btn btn-lg" onClick={() => setOpen(false)}>Cancel</button>
-                      <button className="btn btn-primary btn-lg" disabled={bad} onClick={() => setSent(true)}>Continue to approve</button>
+                      <button className="btn btn-primary btn-lg" disabled={bad || saving} aria-busy={saving} onClick={approve}>{saving ? "Saving…" : "Approve this plan"}</button>
                     </div>
                   </div>
-                  <span style={{ fontSize: 12, color: "var(--muted)" }}>Next, you’ll approve the new amounts in PayPal sandbox. Changes start with your next payment.</span>
+                  {saveErr && <span className="form-err" role="alert">{saveErr}</span>}
+                  <span style={{ fontSize: 12, color: "var(--muted)" }}>Approving saves this as your monthly plan. Nothing is charged now. The server checks it against your limit, and the new amounts start on your next payment day.</span>
                 </div>
               </>
             )}

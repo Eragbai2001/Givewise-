@@ -1,15 +1,17 @@
-import { getConnection, getLimits, getPlan, givenThisMonth, recentPayments } from "@/lib/payments";
+import { getConnection, getLimits, getPlan, givenThisMonth, paidThisMonth, recentPayments, releaseStalePending } from "@/lib/payments";
 import { currentUser } from "@/lib/session";
 
 export async function GET(req: Request) {
   const user = await currentUser(req);
   if (!user) return Response.json({ error: "Please log in first." }, { status: 401 });
-  const [connection, limits, plan, payments, given] = await Promise.all([
+  await releaseStalePending(user.id);
+  const [connection, limits, plan, payments, given, paidIds] = await Promise.all([
     getConnection(user.id),
     getLimits(user.id),
     getPlan(user.id),
     recentPayments(user.id),
     givenThisMonth(user.id),
+    paidThisMonth(user.id),
   ]);
   const sandbox = process.env.PAYPAL_ENV !== "live";
   const testEmail = process.env.PAYPAL_TEST_BUYER_EMAIL;
@@ -24,6 +26,8 @@ export async function GET(req: Request) {
     oneOffLimitCents: limits.oneOffLimitCents,
     givenThisMonthCents: given,
     planSaved: plan.saved,
+    // Charities whose gift for this month has already gone out.
+    paidCharityIds: paidIds,
     plan: plan.items,
     payments,
   });

@@ -31,6 +31,9 @@ const SPLIT = [
 ];
 
 const TOTAL = 9;
+// PayPal sandbox test accounts give up to $50 a month.
+const MAX_BUDGET = 50;
+const PRESETS = [10, 25, 50];
 const CTA = ["Continue", "Continue", "Continue", "Continue", "Connect PayPal", "See my split", "Looks good, approve in PayPal", "", ""];
 const NOTE = [
   "Nothing moves without your approval",
@@ -62,13 +65,13 @@ const ARROW_OUT = ["M7 17L17 7", "M8 7h9v9"];
 export default function OnboardingFlow() {
   const router = useRouter();
   const params = useSearchParams();
-  const startAmount = Number(params.get("amount")) || 50;
+  const startAmount = Math.min(Number(params.get("amount")) || MAX_BUDGET, MAX_BUDGET);
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState("Ada");
   const [picked, setPicked] = useState<Record<string, boolean>>({ water: true, girls: true });
   const [where, setWhere] = useState("mix");
-  const [budget, setBudget] = useState([20, 50, 100].includes(startAmount) ? startAmount : 50);
+  const [budget, setBudget] = useState(PRESETS.includes(startAmount) ? startAmount : MAX_BUDGET);
   const [research, setResearch] = useState(0);
   const [custom, setCustom] = useState(false);
   // Real PayPal connection (Vault). Nothing is charged by connecting.
@@ -127,8 +130,16 @@ export default function OnboardingFlow() {
     setPpBusy(true);
     const ids = ["cs", "bf", "rl"];
     const items = SPLIT.map((x, i) => ({ charityId: ids[i], charityName: x.name, amountCents: Math.round((x.amt / 50) * budget * 100) }));
+    // Fix rounding so the split adds up to exactly the budget.
+    const diff = budget * 100 - items.reduce((t, i) => t + i.amountCents, 0);
+    items[0].amountCents += diff;
     try {
-      const res = await fetch("/api/payments/plan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) });
+      const res = await fetch("/api/payments/plan", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        // The budget picked in step 4 becomes the donor's hard limit.
+        body: JSON.stringify({ items, hardLimitCents: budget * 100 }),
+      });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
         setPpError(d.error || "Couldn’t save your plan. Nothing was approved.");
@@ -297,7 +308,7 @@ export default function OnboardingFlow() {
               <small>/month</small>
             </div>
             <div className="presets">
-              {[20, 50, 100].map((v) => (
+              {PRESETS.map((v) => (
                 <button key={v} className={budget === v ? "on" : ""} aria-pressed={budget === v} onClick={() => { setBudget(v); setCustom(false); }}>
                   ${v}
                 </button>
@@ -306,13 +317,14 @@ export default function OnboardingFlow() {
                 <input
                   type="number"
                   min={1}
+                  max={MAX_BUDGET}
                   autoFocus
                   aria-label="Other monthly amount in dollars"
                   className="num"
                   style={{ font: "inherit", fontSize: 14, fontWeight: 600, minHeight: 44, borderRadius: 11, border: "1px solid var(--accent)", background: "var(--surface)", color: "var(--text)", textAlign: "center", width: "100%" }}
                   onChange={(e) => {
                     const v = Math.round(Number(e.target.value));
-                    if (v > 0) setBudget(v);
+                    if (v > 0) setBudget(Math.min(v, MAX_BUDGET));
                   }}
                 />
               ) : (
@@ -332,7 +344,7 @@ export default function OnboardingFlow() {
                 </span>
               </div>
               <span style={{ fontSize: 13, lineHeight: "18px", color: "var(--muted)" }}>
-                Pip can never plan more than this. Raising it takes 24 hours, so nothing changes on impulse.
+                Pip can never plan more than this, and the server checks it before every payment. Test accounts can give up to ${MAX_BUDGET} a month.
               </span>
             </div>
           </>
@@ -414,7 +426,7 @@ export default function OnboardingFlow() {
                   ))}
                 </div>
                 <strong className="num" style={{ fontSize: 15 }}>
-                  $50/mo
+                  ${budget}/mo
                 </strong>
               </div>
               {SPLIT.map((s) => (
@@ -422,7 +434,7 @@ export default function OnboardingFlow() {
                   <div className="top">
                     <span className="sw" style={{ background: s.color }} />
                     <span className="nm">{s.name}</span>
-                    <span className="amt num">${Math.round((s.amt / 50) * budget)}</span>
+                    <span className="amt num">${Number.isInteger((s.amt / 50) * budget) ? (s.amt / 50) * budget : ((s.amt / 50) * budget).toFixed(2)}</span>
                   </div>
                   <span className="why2">{s.why}</span>
                   <span className="meta2">

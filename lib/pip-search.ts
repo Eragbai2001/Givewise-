@@ -34,7 +34,9 @@ export class RateLimited extends Error {}
 
 const MODEL = process.env.PIP_MODEL ?? "claude-opus-5-5";
 const CACHE_HOURS = 6;
-const HOURLY_LIMIT = 20;
+// Spending guards. Cached repeats don't count. Change them in .env.local.
+const HOURLY_LIMIT = Number(process.env.PIP_HOURLY_LIMIT) || 5; // per donor
+const DAILY_LIMIT = Number(process.env.PIP_DAILY_LIMIT) || 15; // across everyone
 
 const SYSTEM = `You are Pip's research desk for GiveWise, an app that helps people give to charities they can trust.
 
@@ -90,12 +92,25 @@ async function put(key: string, result: string) {
   );
 }
 
+/** Count one search against a key and return the new total, in one atomic statement (parallel requests can't slip through). */
+async function bump(key: string) {
+  const [row] = await query<{ result: string }>(
+    `INSERT INTO gw_pip_cache (key, result, created_at) VALUES ($1, '1', $2)
+     ON CONFLICT (key) DO UPDATE SET result = CAST(CAST(gw_pip_cache.result AS INTEGER) + 1 AS TEXT)
+     RETURNING result`,
+    [key, new Date().toISOString()],
+  );
+  return Number(row?.result ?? 0);
+}
+
 async function takeSearchToken(userId: string) {
-  const key = `rl:${userId}:${new Date().toISOString().slice(0, 13)}`;
-  const [row] = await query<{ result: string }>("SELECT result FROM gw_pip_cache WHERE key = $1", [key]);
-  const used = Number(row?.result ?? 0);
-  if (used >= HOURLY_LIMIT) throw new RateLimited(`Pip can do ${HOURLY_LIMIT} searches an hour. Try again a little later.`);
-  await put(key, String(used + 1));
+  const now = new Date().toISOString();
+  if ((await bump(`rl:${userId}:${now.slice(0, 13)}`)) > HOURLY_LIMIT) {
+    throw new RateLimited(`Pip can do ${HOURLY_LIMIT} new searches an hour. Try again a little later, or repeat a recent search (those are free).`);
+  }
+  if ((await bump(`rl:all:${now.slice(0, 10)}`)) > DAILY_LIMIT) {
+    throw new RateLimited("Pip has done all its new searches for today. Recent searches still work. Please try again tomorrow.");
+  }
 }
 
 /** Pull every URL that actually showed up in the web search results (and citations). */
@@ -192,6 +207,7 @@ function extractJson(content: unknown[]) {
 async function runModel(client: Anthropic, request: string) {
   const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: request }];
   const all: unknown[] = [];
+  const used = { input: 0, output: 0, searches: 0 };
 
   for (let turn = 0; turn < 4; turn++) {
     const params = {
@@ -213,11 +229,16 @@ async function runModel(client: Anthropic, request: string) {
       } else throw e;
     }
     all.push(...msg.content);
+    used.input += msg.usage.input_tokens + (msg.usage.cache_read_input_tokens ?? 0) + (msg.usage.cache_creation_input_tokens ?? 0);
+    used.output += msg.usage.output_tokens;
+    used.searches += msg.usage.server_tool_use?.web_search_requests ?? 0;
     if (msg.stop_reason === "refusal") break;
     if (msg.stop_reason !== "pause_turn") break;
     // Server-side search needs more time: hand the partial turn back and let it continue.
     messages.push({ role: "assistant", content: msg.content });
   }
+  // Rough cost so you can watch spend in the server log (list prices: Opus 5.5 $4/$20 per M tokens, $0.01 per web search).
+  console.log(`[GiveWise] Pip search used ${used.input} input + ${used.output} output tokens and ${used.searches} web searches (model ${MODEL}).`);
   return all;
 }
 

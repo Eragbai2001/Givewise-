@@ -10,6 +10,10 @@ import { chargeVault, PayPalError } from "./paypal";
  *  - GiveWise never holds money: each order is paid to the charity's PayPal (payee) directly.
  */
 export const DEFAULT_LIMIT_CENTS = 5000;
+/** Highest limit anyone can set while we run on PayPal sandbox test accounts. */
+export const MAX_LIMIT_CENTS = 5000;
+/** A charge still PENDING after this long never heard back from PayPal (e.g. the server stopped mid-request). */
+const STALE_PENDING_MS = 10 * 60_000;
 
 /** The sample plan shown across the app until the donor saves their own. */
 export const SAMPLE_PLAN = [
@@ -24,7 +28,46 @@ const now = () => new Date().toISOString();
 type Settings = { hard_limit_cents: number; one_off_limit_cents: number };
 export async function getLimits(userId: string) {
   const [s] = await query<Settings>("SELECT hard_limit_cents, one_off_limit_cents FROM gw_setting WHERE user_id = $1", [userId]);
-  return { hardLimitCents: s?.hard_limit_cents ?? DEFAULT_LIMIT_CENTS, oneOffLimitCents: s?.one_off_limit_cents ?? DEFAULT_LIMIT_CENTS };
+  const cap = (n: number | undefined) => Math.min(Number(n ?? DEFAULT_LIMIT_CENTS), MAX_LIMIT_CENTS);
+  return { hardLimitCents: cap(s?.hard_limit_cents), oneOffLimitCents: cap(s?.one_off_limit_cents) };
+}
+
+/** Save the donor's limits. Never above MAX_LIMIT_CENTS, and never below what their saved plan already needs. */
+export async function saveLimits(userId: string, limits: { hardLimitCents: number; oneOffLimitCents?: number }) {
+  const hard = limits.hardLimitCents;
+  const current = await getLimits(userId);
+  const oneOff = limits.oneOffLimitCents ?? Math.min(current.oneOffLimitCents, hard);
+  for (const n of [hard, oneOff]) {
+    if (!Number.isInteger(n) || n <= 0) throw new LimitError("Limits must be more than $0.");
+    if (n > MAX_LIMIT_CENTS) throw new LimitError(`Test accounts can be set up to $${MAX_LIMIT_CENTS / 100} a month.`);
+  }
+  if (oneOff > hard) throw new LimitError("A one-off gift can’t be more than your monthly limit.");
+  await query(
+    `INSERT INTO gw_setting (user_id, hard_limit_cents, one_off_limit_cents) VALUES ($1,$2,$3)
+     ON CONFLICT (user_id) DO UPDATE SET hard_limit_cents = EXCLUDED.hard_limit_cents, one_off_limit_cents = EXCLUDED.one_off_limit_cents`,
+    [userId, hard, oneOff],
+  );
+}
+
+/**
+ * Release charges that never heard back from PayPal, so they stop counting against the limit.
+ * If PayPal did take the money after all, the PAYMENT.CAPTURE.COMPLETED webhook marks it paid again.
+ */
+export async function releaseStalePending(userId: string) {
+  const cutoff = new Date(Date.now() - STALE_PENDING_MS).toISOString();
+  await query(
+    "UPDATE gw_payment SET status = 'FAILED', error = $3 WHERE user_id = $1 AND status = 'PENDING' AND created_at < $2",
+    [userId, cutoff, "No reply from PayPal. Nothing is counted unless PayPal confirms it."],
+  );
+}
+
+/** Charities whose monthly gift has already gone out (or is going out) this month. */
+export async function paidThisMonth(userId: string) {
+  const rows = await query<{ charity_id: string }>(
+    "SELECT DISTINCT charity_id FROM gw_payment WHERE user_id = $1 AND month = $2 AND kind = 'monthly' AND status IN ('PENDING','COMPLETED')",
+    [userId, monthKey()],
+  );
+  return rows.map((r) => r.charity_id);
 }
 
 export async function getConnection(userId: string) {
@@ -146,6 +189,7 @@ async function charge(opts: {
 export async function runPaymentDay(userId: string, opts: { dedupe: boolean }) {
   const conn = await getConnection(userId);
   if (!conn) throw new LimitError("Connect PayPal first. Nothing can be sent until you approve it.");
+  await releaseStalePending(userId);
   const { hardLimitCents } = await getLimits(userId);
   const plan = await getPlan(userId);
 
@@ -176,6 +220,7 @@ export async function runPaymentDay(userId: string, opts: { dedupe: boolean }) {
 export async function giveOnce(userId: string, item: { charityId: string; charityName: string; amountCents: number; payeeEmail?: string | null }) {
   const conn = await getConnection(userId);
   if (!conn) throw new LimitError("Connect PayPal first. Nothing can be sent until you approve it.");
+  await releaseStalePending(userId);
   const limits = await getLimits(userId);
   if (item.amountCents > limits.oneOffLimitCents) {
     throw new LimitError(`One gift can be at most $${(limits.oneOffLimitCents / 100).toFixed(2)}.`);

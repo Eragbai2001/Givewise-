@@ -13,7 +13,7 @@ type Props = {
   onToggle: (id: string) => void;
 };
 
-const KIND_LABEL: Record<string, string> = { registry: "Registry", report: "Report", news: "News", official: "Official site", social: "Social post", other: "Source" };
+export const KIND_LABEL: Record<string, string> = { registry: "Registry", report: "Report", news: "News", official: "Official site", social: "Social post", other: "Source" };
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 

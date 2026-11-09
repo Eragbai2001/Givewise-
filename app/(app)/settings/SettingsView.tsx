@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Pip from "@/components/Pip";
 import EmptyState from "@/components/app/EmptyState";
 import { I, Ic } from "@/components/app/icons";
 import { useDemoState } from "@/lib/demo-state";
 import { isOnboarded } from "@/lib/onboarding";
 import { fetchMe, type Me } from "@/lib/auth-client";
+import { paymentsChanged } from "@/lib/use-payments";
 
 type Tab = "profile" | "causes" | "budget" | "pip" | "notif" | "pay" | "sec";
 type ThemePick = "light" | "dark" | "system";
@@ -59,6 +60,9 @@ export default function SettingsView() {
   const [form, setForm] = useState(0); // bump to reset unsaved edits
 
   const [me, setMe] = useState<Me | null>(null);
+  const [saveErr, setSaveErr] = useState("");
+  // Tabs that really save register a function here. It returns an error message, or null when saved.
+  const saver = useRef<null | (() => Promise<string | null>)>(null);
 
   useEffect(() => {
     setOnboarded(isOnboarded());
@@ -80,8 +84,10 @@ export default function SettingsView() {
     : [];
   const incomplete = !onboarded || missing.length > 0;
 
-  const save = () => {
-    // TODO: PATCH /api/settings once accounts are real.
+  const save = async () => {
+    setSaveErr("");
+    const err = saver.current ? await saver.current() : null;
+    if (err) return setSaveErr(err);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2200);
   };
@@ -104,6 +110,12 @@ export default function SettingsView() {
           <button className="btn btn-primary" onClick={save}>Save changes</button>
         </div>
       </div>
+
+      {saveErr && (
+        <p className="form-err" role="alert" style={{ margin: 0 }}>
+          {saveErr}
+        </p>
+      )}
 
       {incomplete && (
         <div className="set-note" role="status">
@@ -140,7 +152,7 @@ export default function SettingsView() {
         <div className="set-body" role="tabpanel">
           {tab === "profile" && <Profile me={me} key={me?.id ?? "demo"} theme={theme} setTheme={(t) => { setTheme(t); applyTheme(t); }} />}
           {tab === "causes" && <Causes empty={empty} />}
-          {tab === "budget" && <Budget empty={empty} />}
+          {tab === "budget" && <Budget empty={empty} register={(fn) => (saver.current = fn)} />}
           {tab === "pip" && <PipPrefs />}
           {tab === "notif" && <Notifications />}
           {tab === "pay" && <Payments state={state} />}
@@ -345,17 +357,48 @@ function Causes({ empty }: { empty: boolean }) {
   );
 }
 
-function Budget({ empty }: { empty: boolean }) {
-  const start = empty ? "" : "50";
-  const [budget, setBudget] = useState(start);
-  const [hard, setHard] = useState(start);
-  const [per, setPer] = useState(empty ? "" : "30");
-  const [oneoff, setOneoff] = useState(empty ? "" : "20");
+function Budget({ empty, register }: { empty: boolean; register: (fn: null | (() => Promise<string | null>)) => void }) {
+  const [hard, setHard] = useState(empty ? "" : "50");
+  const [oneoff, setOneoff] = useState(empty ? "" : "50");
+  const [planned, setPlanned] = useState(0);
+  const MAX = 50;
+
+  // Load the donor's real limits.
+  useEffect(() => {
+    fetch("/api/payments/status", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setHard(String(d.hardLimitCents / 100));
+        setOneoff(String(d.oneOffLimitCents / 100));
+        setPlanned(d.planSaved ? d.plan.reduce((t: number, i: { amountCents: number }) => t + i.amountCents, 0) / 100 : 0);
+      })
+      .catch(() => {});
+  }, []);
 
   const h = Number(hard) || 0;
-  const raised = !empty && h > 50;
-  const budgetErr = Number(budget) > h && h > 0 ? "Your budget is above your hard limit. Pip will only plan up to the limit." : undefined;
-  const perErr = Number(per) > h && h > 0 ? "This is more than your hard limit." : undefined;
+  const o = Number(oneoff) || 0;
+  const hardErr = h > MAX ? `Test accounts can be set up to $${MAX} a month.` : h > 0 && h < planned ? `Your plan gives $${planned} a month, so the limit can’t be lower than that.` : undefined;
+  const oneErr = o > h && h > 0 ? "A one-off gift can’t be more than your monthly limit." : undefined;
+
+  // Save button in the page header calls this.
+  useEffect(() => {
+    register(async () => {
+      if (!(h > 0) || !(o > 0)) return "Enter both limits.";
+      if (hardErr || oneErr) return hardErr ?? oneErr ?? null;
+      const r = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hardLimitCents: Math.round(h * 100), oneOffLimitCents: Math.round(o * 100) }),
+      }).catch(() => null);
+      if (!r) return "Couldn’t reach GiveWise. Your limits didn’t change.";
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return d.error || "Couldn’t save your limits.";
+      paymentsChanged();
+      return null;
+    });
+    return () => register(null);
+  }, [h, o, hardErr, oneErr, register]);
 
   return (
     <>
@@ -365,21 +408,16 @@ function Budget({ empty }: { empty: boolean }) {
           <p><b>No limit set yet</b> · until you set one, nothing can be paid.</p>
         </div>
       )}
-      <Row title="Monthly budget" desc="How much you want to give each month.">
-        <div className="fields">
-          <Money label="Monthly budget" value={budget} set={setBudget} err={budgetErr} />
-        </div>
-      </Row>
-      <Row title="Hard limit" desc="GiveWise can never go above this, whatever happens.">
+      <Row title="Hard limit" desc="GiveWise can never go above this in a month, whatever happens. The server checks it before every payment.">
         <div className="fields">
           <Money
             label="Monthly hard limit"
             value={hard}
             set={setHard}
-            hint={raised ? `Raising to $${h} applies in 24 hours. Until then the limit stays $50.` : "Raising it takes 24 hours to apply. Lowering it applies now."}
+            err={hardErr}
+            hint={`Test accounts can be set up to $${MAX}.${planned ? ` Your plan gives $${planned} a month.` : ""}`}
           />
-          <Money label="Most for any one charity" value={per} set={setPer} err={perErr} />
-          <Money label="One-off gift limit" value={oneoff} set={setOneoff} hint="For urgent appeals, on top of your plan." />
+          <Money label="One-off gift limit" value={oneoff} set={setOneoff} err={oneErr} hint="The most for one extra gift, like an urgent appeal. It still counts toward your monthly limit." />
         </div>
       </Row>
       <Row title="Your approval" desc="This is how GiveWise works, so it can’t be turned off.">

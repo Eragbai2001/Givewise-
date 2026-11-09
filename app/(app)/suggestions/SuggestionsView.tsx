@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import Pip, { type PipMood } from "@/components/Pip";
 import EmptyState from "@/components/app/EmptyState";
+import LiveAppeals from "@/components/app/LiveAppeals";
 import { I, Ic } from "@/components/app/icons";
 import { useDemoState } from "@/lib/demo-state";
 
@@ -133,6 +134,14 @@ export default function SuggestionsView() {
           <h1>Pip’s suggestions</h1>
           <p>Urgent appeals, matches and better places for your money. Pip suggests. Only you decide.</p>
         </div>
+      </div>
+
+      <LiveAppeals />
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0, fontSize: 16 }}>Examples of Pip’s weekly suggestions</h2>
+        <span className="chip neutral">Sample data</span>
+        <span style={{ fontSize: 12, color: "var(--muted)" }}>How Pip’s weekly check will look. These aren’t real charities and nothing here is charged.</span>
       </div>
 
       <div className="inbox">

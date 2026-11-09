@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { I, Ic } from "@/components/app/icons";
 import TestLoginNote, { type TestLogin } from "@/components/TestLoginNote";
+import { paymentsChanged } from "@/lib/use-payments";
 
 type Payment = { id: string; charityName: string; amountCents: number; kind: string; status: string; orderId: string | null; error: string | null; createdAt: string };
 type Status = {
@@ -14,6 +15,7 @@ type Status = {
   hardLimitCents: number;
   givenThisMonthCents: number;
   planSaved: boolean;
+  paidCharityIds: string[];
   plan: { charityId: string; charityName: string; amountCents: number }[];
   payments: Payment[];
 };
@@ -66,6 +68,7 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
     setBusy("");
     load();
     onChanged?.();
+    paymentsChanged();
   }
 
   if (loggedOut) {
@@ -80,6 +83,15 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
 
   const planTotal = s.plan.reduce((t, i) => t + i.amountCents, 0);
   const over = planTotal > s.hardLimitCents;
+  // Payment day pays each charity once a month. Once they're all paid, there's nothing left to run.
+  const due = s.plan.filter((i) => !s.paidCharityIds.includes(i.charityId));
+  const dueTotal = due.reduce((t, i) => t + i.amountCents, 0);
+  const allPaid = s.plan.length > 0 && due.length === 0;
+  // Money left under this month's limit. If the rest of the plan doesn't fit, it waits for next month.
+  const noRoom = !allPaid && s.givenThisMonthCents > 0 && dueTotal > s.hardLimitCents - s.givenThisMonthCents;
+  const now = new Date();
+  const thisMonth = now.toLocaleDateString("en-GB", { month: "long" });
+  const nextDay = new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 
   return (
     <section className="card" aria-labelledby="paypal-h">
@@ -109,14 +121,26 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
               {s.paypalEmail ? <>as <b>{s.paypalEmail}</b>. </> : null}
               Given this month: <b className="num">{usd(s.givenThisMonthCents)}</b> of your <b className="num">{usd(s.hardLimitCents)}</b> limit.
             </p>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-              <button className="btn btn-primary" onClick={run} disabled={busy !== "" || over} aria-busy={busy === "run"}>
-                {busy === "run" ? "Sending…" : `Run payment day now (${usd(planTotal)})`}
-              </button>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                {s.planSaved ? "Uses your approved plan." : "Uses the sample plan until you approve your own."} Stops at your limit.
-              </span>
-            </div>
+            {allPaid ? (
+              <p style={{ margin: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <span className="chip ok"><Ic d={I.check} style={{ width: 12, height: 12 }} />{thisMonth} is done</span>
+                <span>Every charity in your plan has been paid for {thisMonth}. The next payment day is <b>{nextDay}</b>.</span>
+              </p>
+            ) : noRoom ? (
+              <p style={{ margin: 0 }}>
+                You’ve given <b className="num">{usd(s.givenThisMonthCents)}</b> of your <b className="num">{usd(s.hardLimitCents)}</b> limit this month, so the rest of your plan ({usd(dueTotal)}) starts on <b>{nextDay}</b>. Nothing more is sent this month.
+              </p>
+            ) : (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="btn btn-primary" onClick={run} disabled={busy !== "" || over} aria-busy={busy === "run"}>
+                  {busy === "run" ? "Sending…" : `Run payment day now (${usd(dueTotal)})`}
+                </button>
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {s.planSaved ? "Uses your approved plan." : "Uses the sample plan until you approve your own."}
+                  {due.length < s.plan.length ? ` ${s.plan.length - due.length} already paid this month.` : ""} Stops at your limit.
+                </span>
+              </div>
+            )}
             {over && <p className="form-err" role="alert" style={{ margin: 0 }}>Your plan is over your limit, so nothing can be sent.</p>}
           </>
         )}

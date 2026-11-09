@@ -9,6 +9,7 @@ import { I, Ic } from "./icons";
 import { DemoStateSwitcher, useDemoState } from "@/lib/demo-state";
 import { authClient, fetchMe, type Me } from "@/lib/auth-client";
 import { setOnboardedLocal } from "@/lib/onboarding";
+import { usePayments } from "@/lib/use-payments";
 
 const MAIN = [
   { href: "/plan", label: "My plan", icon: I.plan },
@@ -44,12 +45,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Signed-in user (null = browsing the demo without an account).
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
+  const [checked, setChecked] = useState(false);
   useEffect(() => {
     fetchMe().then(({ user }) => {
+      // The app is for signed-in donors only. Send everyone else to log in.
+      if (!user) return router.replace("/login");
       setMe(user);
-      if (user) setOnboardedLocal(user.onboarded);
+      setOnboardedLocal(user.onboarded);
+      setChecked(true);
     });
-  }, []);
+  }, [router]);
+
+  // The real limit and this month's giving, shown in the sidebar card and the strip.
+  const { status } = usePayments();
+  const usd = (c: number) => `$${Number.isInteger(c / 100) ? c / 100 : (c / 100).toFixed(2)}`;
+  const limitC = status?.hardLimitCents ?? 5000;
+  const givenC = status?.givenThisMonthCents ?? 0;
+  const plannedC = (status?.plan ?? []).reduce((t, i) => t + i.amountCents, 0);
+  const pct = Math.min(100, Math.round((givenC / limitC) * 100));
   const initials = (me?.name || "Ada Lewis").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const logout = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -121,12 +134,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       <Ic d={I.lock} style={{ color: "var(--accent-ink)" }} />
                       Spending limit
                     </span>
-                    <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>$50/mo</span>
+                    <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{usd(limitC)}/mo</span>
                   </div>
-                  <div className="meter" role="img" aria-label="$50 of $50 monthly limit planned">
-                    <span style={{ width: "100%" }} />
+                  <div className="meter" role="img" aria-label={`${usd(givenC)} of ${usd(limitC)} monthly limit given this month`}>
+                    <span style={{ width: `${pct}%` }} />
                   </div>
-                  <span className="num" style={{ fontSize: 12, color: "var(--muted)" }}>$50 of $50 planned</span>
+                  <span className="num" style={{ fontSize: 12, color: "var(--muted)" }}>
+                    {usd(givenC)} given this month · {usd(plannedC)} planned
+                  </span>
                 </>
               ) : (
                 <>
@@ -180,7 +195,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Ic d={I.lock} />
               {hasPlan ? (
                 <>
-                  Limit <span className="num">$50</span>/mo
+                  Limit <span className="num">{usd(limitC)}</span>/mo
                 </>
               ) : (
                 "No limit set"
@@ -193,7 +208,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          {children}
+          {checked ? children : <main className="content" aria-busy="true" />}
 
           <nav className="bottomnav" aria-label="Main">
             {BOTTOM.map((n) => (

@@ -56,7 +56,7 @@ An AI giving agent. Pip — a water-droplet mascot — finds and verifies charit
   - `help`: placeholder.
 - `lib/*-data.ts`: **mock data**. `lib/demo-state.tsx` lets every page be viewed as `full | new | empty` (`?state=` or the dev-only "Data" switcher). Keep the empty/new states working when wiring real data.
 - `app/app.css`: app shell and page styles. It uses **container queries** on `.gwapp` (1180px icon rail, 900px, 640px bottom nav).
-- App pages are deliberately **not** login-protected yet (Jaime wanted to click around freely). Add a guard only when he says so.
+- App pages need a login: `AppShell` sends logged-out visitors to `/login` (added Nov 2026). The API routes check the session too.
 
 ## Payments plan (BUILT, needs a Vault-enabled sandbox merchant to test end-to-end — see "Payments: what exists")
 
@@ -97,6 +97,9 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - Routes: `POST /api/paypal/vault/start`, `GET /api/paypal/vault/return`, `GET /api/payments/status`, `POST /api/payments/{plan,run,give}`, `POST /api/paypal/webhook` (needs `PAYPAL_WEBHOOK_ID`).
 - UI: onboarding step 5 really connects PayPal; step 8 saves the plan; `components/app/PaymentPanel.tsx` on My plan has "Run payment day now".
 - **Blocker found 12 Oct:** `POST /v3/vault/setup-tokens` returns `NOT_AUTHORIZED` with the current sandbox app (plain Orders work). The sandbox business account is probably not in a Vault-supported country (Nigeria isn't). Fix: create a **US** sandbox Business account, create a new REST app on it with "Save payment methods" ticked, swap `PAYPAL_CLIENT_ID/SECRET`.
+- Limits: `gw_setting` is written by onboarding (the budget the donor picks becomes the hard limit) and by Settings → Budget & limits (`POST /api/settings`). Capped at **$50** (`MAX_LIMIT_CENTS`) while we test on sandbox accounts.
+- "Run payment day now" skips charities already paid this month; once all are paid, My plan shows "<month> is done" instead of the button.
+- A charge stuck in PENDING for 10+ minutes is marked FAILED so it stops counting against the limit (`releaseStalePending`); the COMPLETED webhook flips it back if PayPal did take it.
 - Charity `payee` needs a sandbox merchant email (`PAYPAL_DEMO_PAYEE_EMAIL`). Real charities need their own PayPal merchant ids, not yet collected.
 
 ## Pip's research agent
@@ -104,5 +107,8 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - `lib/pip-search.ts` + `POST /api/pip/search`: Claude (`claude-opus-5-5`, `web_search_20260209`) researches charities on the live web. Needs `ANTHROPIC_API_KEY`.
 - Trust rules are enforced in code: a proof link only counts if that exact URL appeared in the search results; confidence is recomputed (verified needs ≥2 domains incl. a registry/report/news source; the model can only lower it). Tested offline.
 - Social posts (Instagram/X) only appear if web search indexes them. We do not scrape those platforms (ToS, and unreliable).
-- Cached 6h per query (`gw_pip_cache`), 20 searches/user/hour.
+- Cached 6h per query (`gw_pip_cache`). New searches capped at 5/user/hour and 15/day across everyone (`PIP_HOURLY_LIMIT`, `PIP_DAILY_LIMIT`) to protect the API budget.
 - UI: `components/app/LiveSearch.tsx` on Discover. Found charities can be added to picks.
+- Urgent appeals: `components/app/LiveAppeals.tsx` at the top of Pip's suggestions. It asks `/api/pip/search` for charities with a current appeal, hides "Couldn't verify" ones, and "Give $X once" (after a confirm) calls `POST /api/payments/give`. The cards below it are labelled sample data.
+- Discover → "Approve this plan" saves the split with `POST /api/payments/plan` (live charities keep their `live-…` ids). In sandbox every gift is paid to `PAYPAL_DEMO_PAYEE_EMAIL`, and the UI says so.
+- Each Pip search logs its tokens and web searches to the server console. Rough cost on Opus 5.5: $0.30–0.60 per fresh search; cached repeats are free.
