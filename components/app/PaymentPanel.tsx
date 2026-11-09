@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { I, Ic } from "@/components/app/icons";
@@ -22,7 +23,6 @@ type Status = {
 type RunResult = { charityName: string; amountCents: number; status: string; orderId?: string | null; reason?: string };
 
 const usd = (c: number) => `$${(c / 100).toFixed(2)}`;
-const STATUS_CHIP: Record<string, string> = { COMPLETED: "ok", FAILED: "conf-n", BLOCKED: "conf-n", PENDING: "rev", SKIPPED: "rev" };
 const STATUS_TEXT: Record<string, string> = { COMPLETED: "Sent", FAILED: "Failed", BLOCKED: "Stopped by your limit", PENDING: "Pending", SKIPPED: "Skipped" };
 
 /** Real PayPal connection + "run payment day now" (sandbox). Everything here calls the server; the server enforces the limit. */
@@ -115,64 +115,73 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
             <TestLoginNote login={s.testLogin} />
           </>
         ) : (
-          <>
-            <p style={{ margin: 0 }}>
-              <span className="chip ok"><Ic d={I.check} style={{ width: 12, height: 12 }} />Connected</span>{" "}
-              {s.paypalEmail ? <>as <b>{s.paypalEmail}</b>. </> : null}
-              Given this month: <b className="num">{usd(s.givenThisMonthCents)}</b> of your <b className="num">{usd(s.hardLimitCents)}</b> limit.
-            </p>
-            {allPaid ? (
-              <p style={{ margin: 0, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <span className="chip ok"><Ic d={I.check} style={{ width: 12, height: 12 }} />{thisMonth} is done</span>
-                <span>Every charity in your plan has been paid for {thisMonth}. The next payment day is <b>{nextDay}</b>.</span>
-              </p>
-            ) : noRoom ? (
-              <p style={{ margin: 0 }}>
-                You’ve given <b className="num">{usd(s.givenThisMonthCents)}</b> of your <b className="num">{usd(s.hardLimitCents)}</b> limit this month, so the rest of your plan ({usd(dueTotal)}) starts on <b>{nextDay}</b>. Nothing more is sent this month.
-              </p>
-            ) : (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                <button className="btn btn-primary" onClick={run} disabled={busy !== "" || over} aria-busy={busy === "run"}>
-                  {busy === "run" ? "Sending…" : `Run payment day now (${usd(dueTotal)})`}
-                </button>
-                <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                  {s.planSaved ? "Uses your approved plan." : "Uses the sample plan until you approve your own."}
-                  {due.length < s.plan.length ? ` ${s.plan.length - due.length} already paid this month.` : ""} Stops at your limit.
-                </span>
+          <div className="paypanel">
+            {/* Left: the account and this month's giving against the limit */}
+            <div className="pp-left">
+              <div className="pp-acct">
+                <span className="chip ok"><Ic d={I.check} style={{ width: 12, height: 12 }} />Connected</span>
+                {s.paypalEmail && <span className="pp-email" title={s.paypalEmail}>{s.paypalEmail}</span>}
               </div>
-            )}
-            {over && <p className="form-err" role="alert" style={{ margin: 0 }}>Your plan is over your limit, so nothing can be sent.</p>}
-          </>
+              <div className="pp-month">
+                <div className="pp-month-top">
+                  <span>Given in {thisMonth}</span>
+                  <span className="num"><b>{usd(s.givenThisMonthCents)}</b> of {usd(s.hardLimitCents)}</span>
+                </div>
+                <div className="meter" role="img" aria-label={`${usd(s.givenThisMonthCents)} of ${usd(s.hardLimitCents)} limit given in ${thisMonth}`}>
+                  <span style={{ width: `${Math.min(100, Math.round((s.givenThisMonthCents / s.hardLimitCents) * 100))}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Right: what happens next */}
+            <div className="pp-right">
+              {allPaid ? (
+                <>
+                  <span className="pp-status"><Ic d={I.check} />{thisMonth} is done</span>
+                  <span className="pp-sub">Every charity in your plan is paid. Next payment day: <b>{nextDay}</b>.</span>
+                </>
+              ) : noRoom ? (
+                <>
+                  <span className="pp-status muted">Limit reached for {thisMonth}</span>
+                  <span className="pp-sub">The rest of your plan ({usd(dueTotal)}) goes out on <b>{nextDay}</b>.</span>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-primary" onClick={run} disabled={busy !== "" || over} aria-busy={busy === "run"}>
+                    {busy === "run" ? "Sending…" : `Run payment day now · ${usd(dueTotal)}`}
+                  </button>
+                  <span className="pp-sub">
+                    {s.planSaved ? "Your approved plan" : "Sample plan until you approve your own"}
+                    {due.length < s.plan.length ? ` · ${s.plan.length - due.length} already paid` : ""} · stops at your limit
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
         )}
 
-        {results && (
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }} aria-live="polite">
-            {results.map((r, i) => (
-              <li key={i} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
-                <span className={`chip ${STATUS_CHIP[r.status] ?? "rev"}`}>{STATUS_TEXT[r.status] ?? r.status}</span>
-                <b>{r.charityName}</b>
-                <span className="num">{usd(r.amountCents)}</span>
-                {r.orderId && <span style={{ color: "var(--muted)" }}>Order {r.orderId}</span>}
-                {r.reason && <span style={{ color: "var(--muted)" }}>{r.reason}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
+        {over && <p className="form-err" role="alert" style={{ margin: 0 }}>Your plan is over your limit, so nothing can be sent.</p>}
 
-        {s.payments.length > 0 && (
-          <details>
-            <summary style={{ cursor: "pointer", fontWeight: 500 }}>Recent payments ({s.payments.length})</summary>
-            <ul style={{ margin: "10px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>
-              {s.payments.map((p) => (
-                <li key={p.id} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <span className={`chip ${STATUS_CHIP[p.status] ?? "rev"}`}>{STATUS_TEXT[p.status] ?? p.status}</span>
-                  <span>{p.charityName}</span>
-                  <span className="num">{usd(p.amountCents)}</span>
-                  <span style={{ color: "var(--muted)" }}>{new Date(p.createdAt).toLocaleDateString()}{p.orderId ? ` · ${p.orderId}` : ""}</span>
-                </li>
+        {results && (() => {
+          const sent = results.filter((r) => r.status === "COMPLETED");
+          const notSent = results.filter((r) => r.status !== "COMPLETED" && r.status !== "SKIPPED");
+          return (
+            <div className="pp-result" role="status" aria-live="polite">
+              {sent.length > 0 && (
+                <span><b>Sent {usd(sent.reduce((t, r) => t + r.amountCents, 0))}</b> to {sent.length} {sent.length === 1 ? "charity" : "charities"} through PayPal.</span>
+              )}
+              {notSent.map((r, i) => (
+                <span key={i} style={{ color: "var(--red-ink)" }}>{r.charityName}: {STATUS_TEXT[r.status] ?? r.status}. {r.reason}</span>
               ))}
-            </ul>
-          </details>
+              {sent.length === 0 && notSent.length === 0 && <span>Nothing to send. Everything is already paid this month.</span>}
+            </div>
+          );
+        })()}
+
+        {s.connected && s.payments.length > 0 && (
+          <Link className="src" href="/history" style={{ alignSelf: "flex-start", fontSize: 13 }}>
+            See every payment and receipt in History &amp; receipts
+          </Link>
         )}
       </div>
     </section>

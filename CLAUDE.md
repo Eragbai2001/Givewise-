@@ -47,6 +47,10 @@ An AI giving agent. Pip — a water-droplet mascot — finds and verifies charit
   - Log in goes to onboarding if `onboarded` is false, otherwise `/plan`.
   - `app/auth/continue` is where Google/PayPal sign-ins land; it routes the same way.
 - `app/onboarding`, `components/onboarding/OnboardingFlow.tsx`: 9 steps with Pip. The last step calls `markOnboarded()` (`lib/onboarding.ts`). "Finish later" goes to `/plan` without marking.
+  - Step 2 causes include **Animals**; the "tell Pip in your own words" box is real (`words`) and shows under "Pip heard".
+  - Budget presets $10/$25/$50 (max $50). Approving saves the budget as the hard limit and the split as the plan.
+  - Step 6 runs **one live Pip search** (`/api/pip/search`) from causes + words + where, and `liveSplit()` builds up to 3 charities (verified get 2× the share, whole dollars, sums to the budget, real Source links). If the search fails or finds nothing, `sampleSplit()` is shown and labelled "Sample data".
+  - Answers are kept in `sessionStorage` (`gw-onboarding-answers`) across the PayPal redirect.
 - `app/(app)/*`: the signed-in app, wrapped in `DemoStateProvider` then `AppShell` (`components/app/AppShell.tsx`).
   - `plan`: My plan (donut, weekly check, charities and payments tables).
   - `discover`: catalogue, cause filters, "ask Pip" search, picks tray, split modal.
@@ -95,7 +99,7 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - `lib/paypal.ts` Vault (setup token → payment token, redirect flow, no JS SDK) + Orders v2 with `vault_id`.
 - `lib/payments.ts` the money rules. Every charge inserts a PENDING row first, then checks this month's total against the hard limit, then calls PayPal (idempotent request id). Over the limit → BLOCKED, PayPal never called. Tested.
 - Routes: `POST /api/paypal/vault/start`, `GET /api/paypal/vault/return`, `GET /api/payments/status`, `POST /api/payments/{plan,run,give}`, `POST /api/paypal/webhook` (needs `PAYPAL_WEBHOOK_ID`).
-- UI: onboarding step 5 really connects PayPal; step 8 saves the plan; `components/app/PaymentPanel.tsx` on My plan has "Run payment day now".
+- UI: onboarding step 5 really connects PayPal; step 8 saves the plan; `components/app/PaymentPanel.tsx` on My plan shows the account, a given-this-month meter and "Run payment day now" (or "<month> is done" / "Limit reached"). It no longer lists payments; it links to History & receipts.
 - **Blocker found 12 Oct:** `POST /v3/vault/setup-tokens` returns `NOT_AUTHORIZED` with the current sandbox app (plain Orders work). The sandbox business account is probably not in a Vault-supported country (Nigeria isn't). Fix: create a **US** sandbox Business account, create a new REST app on it with "Save payment methods" ticked, swap `PAYPAL_CLIENT_ID/SECRET`.
 - Limits: `gw_setting` is written by onboarding (the budget the donor picks becomes the hard limit) and by Settings → Budget & limits (`POST /api/settings`). Capped at **$50** (`MAX_LIMIT_CENTS`) while we test on sandbox accounts.
 - "Run payment day now" skips charities already paid this month; once all are paid, My plan shows "<month> is done" instead of the button.
@@ -112,3 +116,11 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - Urgent appeals: `components/app/LiveAppeals.tsx` at the top of Pip's suggestions. It asks `/api/pip/search` for charities with a current appeal, hides "Couldn't verify" ones, and "Give $X once" (after a confirm) calls `POST /api/payments/give`. The cards below it are labelled sample data.
 - Discover → "Approve this plan" saves the split with `POST /api/payments/plan` (live charities keep their `live-…` ids). In sandbox every gift is paid to `PAYPAL_DEMO_PAYEE_EMAIL`, and the UI says so.
 - Each Pip search logs its tokens and web searches to the server console. Rough cost on Opus 5.5: $0.30–0.60 per fresh search; cached repeats are free.
+
+## Status (9 Nov 2026)
+
+- Pushed to GitHub `main`; Vercel deploys from it. `ANTHROPIC_API_KEY` goes in Vercel's environment variables only (the dev laptop is a public PC: no `.env.local` is kept on it). Needs a redeploy after adding.
+- Submission checklist: MIT `LICENSE` added; README is judge-ready but still has `TODO`s (live URL, YouTube link, PayPal sandbox buyer login, optional GiveWise test account).
+- `next build` stops once on a Next.js security notice (it passes when run again). Upgrade Next.js if the Vercel build fails.
+- Still sample data (labelled): Discover's built-in catalogue, Impact, Pip's weekly check on My plan, the example cards on Pip's suggestions.
+- In sandbox every gift goes to `PAYPAL_DEMO_PAYEE_EMAIL`, not the real charity. Real payouts need verified charity PayPal accounts (or PayPal Giving Fund).

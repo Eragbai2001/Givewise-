@@ -614,3 +614,22 @@
 .shell.collapsed .nav .count{position:absolute;top:2px;right:2px;padding:0 5px;min-width:18px;font-size:11px;line-height:16px}
 .shell.collapsed .side-foot .nav{margin-top:0}
 .shell.collapsed .guard-strip{display:flex}
+
+/* PayPal & payment day card (My plan) */
+.paypanel{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 28px;align-items:center}
+.pp-left{display:flex;flex-direction:column;gap:12px;min-width:0}
+.pp-acct{display:flex;align-items:center;gap:8px;min-width:0}
+.pp-email{font-size:13px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pp-month{display:flex;flex-direction:column;gap:6px;max-width:420px}
+.pp-month-top{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+.pp-month-top b{color:var(--text);font-weight:600}
+.pp-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;text-align:right}
+.pp-status{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--accent-ink)}
+.pp-status.muted{color:var(--text2)}
+.pp-sub{font-size:12px;line-height:17px;color:var(--muted);max-width:280px}
+.pp-result{display:flex;flex-direction:column;gap:4px;font-size:13px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);border:1px solid var(--accent-line)}
+@container (max-width: 640px){
+  .paypanel{grid-template-columns:minmax(0,1fr)}
+  .pp-right{align-items:flex-start;text-align:left}
+  .pp-month{max-width:none}
+}
