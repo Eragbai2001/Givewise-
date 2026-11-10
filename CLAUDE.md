@@ -137,7 +137,35 @@ Next steps, in order:
 3. Offered, not yet decided: a "Start over" button (Settings → Security) that clears plan, limits and PayPal connection and sends the user back to onboarding, keeping payment history. Ask Jaime.
 4. **Done (10 Nov):** Next.js upgraded 16.4.0 → 16.4.6 (fixes 3 critical advisories: RCE in image optimization with SVGs, RCE in `use cache`, Server Actions DoS). `npm audit` is clean.
 5. README `TODO`s: live URL (confirm), YouTube demo link, PayPal sandbox buyer login, optional GiveWise test account.
-6. Demo video.
+6. **Demo video: in progress (see "Demo video" below). This is the main focus now.**
+
+## Demo video (started 10 Nov 2026), pick up here
+
+Rules (from a third-party listing, confirm on Devpost): **public YouTube video, under 3 minutes**, plus a working demo and an open-source repo.
+
+**Where:** a separate Remotion project at `C:\Users\CLR-ELIBRARY 8\givewise-video` (not in this git repo, not committed anywhere). Remotion `4.0.537` (pinned), React 19.1. Commands from that folder:
+- `npx remotion studio`: live preview in the browser.
+- `npx remotion render src/index.ts <CompositionId> out/<name>.mp4 --codec=h264 --crf=20`
+- `npx remotion still src/index.ts <CompositionId> out/x.png --frame=N --scale=0.5`: quick checks.
+- Remotion's bundled ffmpeg/ffprobe (`npx remotion ffmpeg|ffprobe`) is a stripped build: no `fps`/`tile`/`drawtext` filters. Grab single frames with `-ss T -frames:v 1 -vf scale=480:-1` and stitch with Python PIL (installed).
+
+**Files:**
+- `src/theme.ts` colours (from globals.css), `src/fonts.ts` (Coolvetica + Geist, loaded with delayRender), `src/Pip.tsx` (Pip redrawn and animated from the frame, not CSS, so renders are deterministic), `src/AppClip.tsx` (browser window playing a part of a recording, with a push-in zoom from `zoomFrom` to `zoom`; masks the bottom-right "Activate Windows" watermark).
+- `src/styles/StyleA|B|C.tsx`, registered in `src/Root.tsx` as `A-CleanProduct`, `B-FriendlyPip`, `C-StoryFirst` (15 s previews of the same opening: hook → meet Pip → onboarding clip).
+- `public/rec.mp4` = Jaime's full walkthrough (3:06, 1920×944, dark mode, no audio). `public/rec2.mp4` = second clip (0:31, 1920×948, light mode). `public/img/*` landing photos, `public/fonts/*`.
+- Rendered previews: `out/preview-A-CleanProduct.mp4`, `out/preview-B-FriendlyPip.mp4`, `out/preview-C-StoryFirst.mp4`.
+
+**What's in the recordings (seconds):**
+- `rec.mp4`: 0–21 landing page · 24–56 log in / sign up · 57–72 onboarding (name, causes, where, $50) · 72–90 Connect PayPal in the new tab + sandbox approval · 93–101 Pip checking (**old stretched loader, don't use**) · 102–108 suggested split, approve, "You're all set" · 111–128 My plan with charity cards · 129–155 Discover (old loader at ~129–133, don't use), picks, Share $50 modal, plan saved · 156 My plan with 4 charities · 159–167 Urgent needs (UNICEF Nigeria appeal, Give once) · 168 History empty · 171–186 Settings.
+- `rec2.mp4` (light): 0–6 Discover "Suggested by Pip" · 8–12 My plan, 4 charities, **$50 given, "November is done"** · 14 **History & receipts with 4 PayPal payments + order IDs** · 16–22 Urgent needs appeal with Give once · 24–30 **Impact** page, $50 by charity.
+- Still missing: the **"$25 gift stopped by your limit"** moment (Urgent needs → Give $10 once succeeds, then $25 is blocked by the server). Ask Jaime to record it; it's the strongest trust proof.
+
+**Decisions so far:**
+- Jaime likes **B (Friendly Pip) for the vibe** and **C (Story first) for emotion**, can't decide: **build two full versions (B and C), Jaime picks later.**
+- Voiceover: Jaime will make it in **ElevenLabs** from a script we write (next step: write the ~2:30 script, matched to the chosen beats). Background music: soft, warm, no vocals, under the voice; YouTube Audio Library recommended (cleared for YouTube), ElevenLabs Music or Pixabay as alternatives.
+- Story beats for the full video: problem (people give but never know where it goes) → meet Pip → tell Pip your causes + hard limit → Pip researches live with sources and confidence labels → approve once in PayPal (Vault, nothing charged) → payment day: one PayPal order per charity, receipts with order IDs → Urgent needs + people in need, give once → server stops an over-limit gift → Impact → close ("Pip suggests. You decide." + live URL).
+
+**Next steps:** 1) write the voiceover script (two tones: B playful, C emotional, same facts); 2) Jaime makes the ElevenLabs audio + records the limit-blocked clip; 3) build `Full-B` and `Full-C` compositions timed to the audio, render both; 4) upload the chosen one to YouTube, add the link to the README.
 
 ## Status (9 Nov 2026)
 
