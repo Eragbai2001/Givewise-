@@ -388,16 +388,16 @@ async function rememberFound(userId: string, items: FoundCharity[]) {
   }
 }
 
-/** What Pip found earlier for these ids (this donor only). Missing ids are left out. */
-export async function foundFor(userId: string, ids: string[]): Promise<Record<string, FoundCharity & { checkedAt: string }>> {
-  if (!ids.length) return {};
+/** What Pip found earlier for this donor (optionally only these ids). */
+export async function foundFor(userId: string, ids?: string[]): Promise<Record<string, FoundCharity & { checkedAt: string }>> {
+  if (ids && !ids.length) return {};
   const rows = await query<{ charity_id: string; data: string; updated_at: string }>(
     "SELECT charity_id, data, updated_at FROM gw_found WHERE user_id = $1",
     [userId],
   );
   const out: Record<string, FoundCharity & { checkedAt: string }> = {};
   for (const r of rows) {
-    if (!ids.includes(r.charity_id)) continue;
+    if (ids && !ids.includes(r.charity_id)) continue;
     try {
       out[r.charity_id] = { ...(JSON.parse(r.data) as FoundCharity), checkedAt: r.updated_at };
     } catch {}

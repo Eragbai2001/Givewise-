@@ -103,6 +103,17 @@ export default function PlanView() {
         </div>
       </div>
 
+      {!loaded && (
+        <div className="plan-skel" role="status" aria-label="Loading your plan">
+          <div className="stats">
+            {[0, 1, 2, 3].map((n) => <div key={n} className="stat"><i /><i /><i /></div>)}
+          </div>
+          <div className="card"><i /><i /><i /></div>
+        </div>
+      )}
+
+      {/* Kept mounted while loading (hidden) so the PayPal card starts fetching at once. */}
+      <div className="plan-body" hidden={!loaded}>
       <Suspense>
         <PaymentPanel onChanged={reload} />
       </Suspense>
@@ -338,6 +349,7 @@ export default function PlanView() {
           />
         )}
       </section>
+      </div>
     </main>
   );
 }

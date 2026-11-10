@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { I, Ic } from "@/components/app/icons";
 import TestLoginNote, { type TestLogin } from "@/components/TestLoginNote";
-import { paymentsChanged } from "@/lib/use-payments";
+import { fetchStatus, paymentsChanged } from "@/lib/use-payments";
 import { connectPaypal, onPaypalResult } from "@/lib/paypal-connect";
 
 type Payment = { id: string; charityName: string; amountCents: number; kind: string; status: string; orderId: string | null; error: string | null; createdAt: string };
@@ -38,10 +38,9 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
   const [waiting, setWaiting] = useState(false);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/payments/status", { cache: "no-store" }).catch(() => null);
-    if (!r) return;
-    if (r.status === 401) return setLoggedOut(true);
-    if (r.ok) setS(await r.json());
+    const r = await fetchStatus();
+    if (r.code === 401) return setLoggedOut(true);
+    if (r.data) setS(r.data as unknown as Status);
   }, []);
   useEffect(() => {
     load();
@@ -54,7 +53,9 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
         setWaiting(false);
         if (r.paypal === "connected") setError("");
         else setError(r.paypal === "cancelled" ? "You cancelled at PayPal, so nothing was connected." : r.msg || "PayPal couldn’t be connected.");
-        load().then(() => paymentsChanged());
+        // Clear the shared status first, so every screen (and this card) fetches the new one together.
+        paymentsChanged();
+        load();
         onChanged?.();
       }),
     [load, onChanged],
@@ -79,9 +80,9 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
     if (r?.ok) setResults(d.results);
     else setError(d?.error || "Payment day couldn’t run. Nothing was sent.");
     setBusy("");
+    paymentsChanged();
     load();
     onChanged?.();
-    paymentsChanged();
   }
 
   if (loggedOut) {

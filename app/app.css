@@ -667,3 +667,13 @@
   .pp-right{align-items:flex-start;text-align:left}
   .pp-month{max-width:none}
 }
+
+/* My plan while loading */
+.plan-body{display:flex;flex-direction:column;gap:inherit}
+.plan-body[hidden]{display:none}
+.plan-skel{display:flex;flex-direction:column;gap:inherit}
+.plan-skel .stat,.plan-skel .card{display:flex;flex-direction:column;gap:12px;padding:18px}
+.plan-skel .card{min-height:180px}
+.plan-skel i{display:block;height:12px;width:60%;border-radius:6px;background:linear-gradient(90deg,var(--subtle) 0%,var(--line) 50%,var(--subtle) 100%);background-size:200% 100%;animation:gw-shimmer 1.4s ease-in-out infinite}
+.plan-skel i:nth-child(2){height:24px;width:45%}
+.plan-skel i:nth-child(3){width:75%}

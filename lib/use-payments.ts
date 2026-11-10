@@ -19,21 +19,42 @@ export type RealStatus = {
 };
 
 export const PAYMENTS_CHANGED = "gw-payments";
+
+// One shared request for every part of the screen (sidebar, page, PayPal card), instead of one each.
+type Fetched = { code: number; data: RealStatus | null };
+let inflight: Promise<Fetched> | null = null;
+let last: (Fetched & { at: number }) | null = null;
+
+/** Get the donor's status. Callers within 2 seconds of each other share one request. */
+export function fetchStatus(): Promise<Fetched> {
+  if (last && Date.now() - last.at < 2000) return Promise.resolve(last);
+  inflight ??= fetch("/api/payments/status", { cache: "no-store" })
+    .then(async (r) => ({ code: r.status, data: r.ok ? ((await r.json()) as RealStatus) : null }))
+    .catch(() => ({ code: 0, data: null }))
+    .then((f) => {
+      last = { ...f, at: Date.now() };
+      inflight = null;
+      return f;
+    });
+  return inflight;
+}
+
 /** Tell every screen that payments, the plan or the limits changed. */
-export const paymentsChanged = () => window.dispatchEvent(new Event(PAYMENTS_CHANGED));
+export const paymentsChanged = () => {
+  last = null;
+  inflight = null;
+  window.dispatchEvent(new Event(PAYMENTS_CHANGED));
+};
 
 /** The signed-in donor's real plan and payments. `status` is null when logged out or still loading. */
 export function usePayments() {
-  const [status, setStatus] = useState<RealStatus | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  // Moving between pages shows the last known status straight away, then refreshes it.
+  const [status, setStatus] = useState<RealStatus | null>(() => last?.data ?? null);
+  const [loaded, setLoaded] = useState(() => Boolean(last));
 
   const reload = useCallback(async () => {
-    try {
-      const r = await fetch("/api/payments/status", { cache: "no-store" });
-      setStatus(r.ok ? ((await r.json()) as RealStatus) : null);
-    } catch {
-      setStatus(null);
-    }
+    const f = await fetchStatus();
+    setStatus(f.data);
     setLoaded(true);
   }, []);
 

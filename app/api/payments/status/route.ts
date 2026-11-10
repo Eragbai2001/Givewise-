@@ -6,16 +6,16 @@ export async function GET(req: Request) {
   const user = await currentUser(req);
   if (!user) return Response.json({ error: "Please log in first." }, { status: 401 });
   await releaseStalePending(user.id);
-  const [connection, limits, plan, payments, given, paidIds] = await Promise.all([
+  const [connection, limits, plan, payments, given, paidIds, found] = await Promise.all([
     getConnection(user.id),
     getLimits(user.id),
     getPlan(user.id),
     recentPayments(user.id),
     givenThisMonth(user.id),
     paidThisMonth(user.id),
+    // What Pip found about this donor's charities: sources, confidence, what they do.
+    foundFor(user.id).catch(() => ({}) as Awaited<ReturnType<typeof foundFor>>),
   ]);
-  // What Pip found about each charity in the plan: sources, confidence, what they do.
-  const found = await foundFor(user.id, plan.items.map((i) => i.charityId)).catch(() => ({}) as Awaited<ReturnType<typeof foundFor>>);
   const sandbox = process.env.PAYPAL_ENV !== "live";
   const testEmail = process.env.PAYPAL_TEST_BUYER_EMAIL;
   const testPassword = process.env.PAYPAL_TEST_BUYER_PASSWORD;
