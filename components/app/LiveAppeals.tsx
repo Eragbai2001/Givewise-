@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Pip from "@/components/Pip";
 import { I, Ic } from "@/components/app/icons";
 import GiveOnce from "@/components/app/GiveOnce";
 import PipSearching from "@/components/app/PipSearching";
@@ -49,12 +48,6 @@ export default function LiveAppeals() {
         <span className="meta">Live web research · every claim has a link</span>
       </div>
       <div className="card-b" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
-          <Pip mood={busy ? "researching" : "idle"} size={48} motion={false} decorative />
-          <div className="bubble" style={{ flex: 1 }}>
-            These are charities with an appeal open right now, and people asking for help in the news, on fundraisers and in public posts. I’ve put my sources on each one. You decide if you want to give extra once. Your monthly plan won’t change.
-          </div>
-        </div>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <label className="search" style={{ flex: "1 1 260px" }}>

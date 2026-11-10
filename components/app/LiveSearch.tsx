@@ -29,7 +29,7 @@ function causeOf(text: string): Charity["cause"] {
 
 /** Turn a researched charity into the shape the picks tray and split already understand. */
 export function toCharity(f: FoundCharity): Charity {
-  const words = f.name.split(/\s+/).filter(Boolean);
+  const words = f.name.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
   const best = f.proofs[0];
   return {
     id: foundId(f),

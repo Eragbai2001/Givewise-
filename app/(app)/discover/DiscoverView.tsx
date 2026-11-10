@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Pip from "@/components/Pip";
-import EmptyState from "@/components/app/EmptyState";
 import LiveSearch from "@/components/app/LiveSearch";
+import PipSuggested from "@/components/app/PipSuggested";
 import { I, Ic } from "@/components/app/icons";
 import { hear, type Charity } from "@/lib/discover-data";
 import { paymentsChanged, usePayments } from "@/lib/use-payments";
@@ -12,6 +12,12 @@ import { paymentsChanged, usePayments } from "@/lib/use-payments";
 const PIN = ["M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z", "M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"];
 const PLUS = ["M12 5v14", "M5 12h14"];
 const PEN = ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"];
+/** Two letters for an avatar, skipping symbols: "UNICEF (Water…)" → "UW". */
+const initials = (name: string) => {
+  const w = name.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+  return ((w[0]?.[0] ?? "?") + (w[1]?.[0] ?? "")).toUpperCase();
+};
+
 const ALERT = ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 8v4", "M12 16h.01"];
 const ARROW = ["M5 12h14", "M12 5l7 7-7 7"];
 
@@ -24,6 +30,8 @@ export default function DiscoverView() {
   const [man, setMan] = useState<Record<string, number>>({});
   const [sent, setSent] = useState(false);
   const [live, setLive] = useState<Charity[]>([]);
+  // Charities from "Suggested by Pip" (shown before the donor types anything).
+  const [suggested, setSuggested] = useState<Charity[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
@@ -49,7 +57,7 @@ export default function DiscoverView() {
         .filter((i) => i.charityId.startsWith("live-"))
         .map((i): Charity => {
           const w = i.charityName.split(/\s+/);
-          return { id: i.charityId, name: i.charityName, ini: ((w[0]?.[0] ?? "?") + (w[1]?.[0] ?? "")).toUpperCase(), cause: "local", causeLabel: "In your plan", place: "Found by Pip", region: "af", ver: "p", tint: "var(--grey-soft)", ink: "var(--grey-ink)", color: "#5E7FA3" };
+          return { id: i.charityId, name: i.charityName, ini: initials(i.charityName), cause: "local", causeLabel: "In your plan", place: "Found by Pip", region: "af", ver: "p", tint: "var(--grey-soft)", ink: "var(--grey-ink)", color: "#5E7FA3" };
         });
       setPlanExtras(extras);
       setPicks(status.plan.filter((i) => i.charityId.startsWith("live-")).map((i) => i.charityId));
@@ -63,7 +71,9 @@ export default function DiscoverView() {
 
   const heard = useMemo(() => hear(q), [q]);
 
-  const picked = [...live, ...planExtras.filter((e) => !live.some((l) => l.id === e.id))].filter((c) => picks.includes(c.id));
+  const known: Charity[] = [];
+  for (const c of [...live, ...suggested, ...planExtras]) if (!known.some((k) => k.id === c.id)) known.push(c);
+  const picked = known.filter((c) => picks.includes(c.id));
   const toggle = (id: string) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   // Pip's split: even shares in $5 steps, any remainder to the first pick.
@@ -161,26 +171,14 @@ export default function DiscoverView() {
 
       <LiveSearch query={q} picks={picks} onFound={setLive} onToggle={toggle} />
 
-      {q.trim().length < 3 && (
-        <section className="card">
-          <EmptyState
-            mood="listening"
-            title="Tell Pip what you care about"
-            body="Type a cause and a place, like “rescue dogs in Lagos”. Pip searches the live web and shows only charities it can back with sources you can open."
-            action={
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
-                {["Clean water in Nigeria", "Girls’ education in Kano", "Rescue dogs in Lagos", "Food banks in Abuja"].map((t) => (
-                  <button key={t} className="fchip" onClick={() => setQ(t)}>{t}</button>
-                ))}
-              </div>
-            }
-          />
-        </section>
-      )}
+      {/* Before the donor types: charities Pip already checked. Kept mounted so its picks stay known. */}
+      <div hidden={q.trim().length >= 3}>
+        <PipSuggested picks={picks} onFound={setSuggested} onToggle={toggle} onTry={setQ} />
+      </div>
 
       {picked.length > 0 && (
         <div className="tray" role="region" aria-label="Your picks">
-          <div className="stack" aria-hidden="true">
+          <div className="tray-avs" aria-hidden="true">
             {picked.map((p) => (
               <span key={p.id} className="logo-ph" style={{ background: p.tint, color: p.ink }}>{p.ini}</span>
             ))}
