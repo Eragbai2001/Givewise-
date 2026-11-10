@@ -13,7 +13,7 @@ import { usePayments } from "@/lib/use-payments";
 const MAIN = [
   { href: "/plan", label: "My plan", icon: I.plan },
   { href: "/discover", label: "Discover", icon: I.search },
-  { href: "/suggestions", label: "Pip’s suggestions", icon: I.bulb },
+  { href: "/suggestions", label: "Urgent needs", icon: I.bulb },
   { href: "/impact", label: "Impact", icon: I.heart },
   { href: "/history", label: "History & receipts", icon: I.file },
 ];
@@ -27,7 +27,7 @@ const BOTTOM = [
 ];
 const TITLES: Record<string, string> = {
   "/plan": "My plan",
-  "/suggestions": "Pip’s suggestions",
+  "/suggestions": "Urgent needs",
   "/discover": "Discover",
   "/impact": "Impact",
   "/history": "History & receipts",
@@ -164,7 +164,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
             <span style={{ flex: 1 }} />
             <ThemeToggle />
-            <Link className="iconbtn" href="/suggestions" aria-label="Pip’s suggestions">
+            <Link className="iconbtn" href="/suggestions" aria-label="Urgent needs">
               <Ic d={I.bell} />
             </Link>
             <div className="me">

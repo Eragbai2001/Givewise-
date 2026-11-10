@@ -1,7 +1,16 @@
 // "Has this user finished Pip's setup?"
 // Signed-in users: stored on their account (see /api/me).
 // The localStorage flag stays as a fallback for browsing without an account.
+import { useEffect, useState } from "react";
+
 const KEY = "gw-onboarded";
+
+/** null while loading. AppShell syncs the flag from the account before pages use it. */
+export function useOnboarded(): boolean | null {
+  const [v, setV] = useState<boolean | null>(null);
+  useEffect(() => setV(isOnboarded()), []);
+  return v;
+}
 
 export function isOnboarded(): boolean {
   try {

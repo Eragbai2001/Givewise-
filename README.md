@@ -38,7 +38,7 @@ Pip, a small water-droplet mascot, is the agent.
 | **PayPal Orders v2** with `vault_id` and `payee` | One order per charity on payment day, and one-off gifts to urgent appeals | `lib/paypal.ts`, `lib/payments.ts` |
 | **PayPal webhooks** | Failed, reversed or refunded payments, and revoked approvals | `app/api/paypal/webhook/route.ts` |
 | **Log in with PayPal** | Optional sign-in | `lib/auth.ts` |
-| **Tavily search + Claude (Haiku 5.5)** | Tavily finds web pages; Claude reads them and returns charities and current appeals with proof links | `lib/pip-search.ts`, `app/api/pip/search/route.ts` |
+| **Tavily search + Claude (Haiku 5.5)** | Tavily finds web pages, news, fundraisers and public posts; Claude reads them and streams back charities, current appeals and people in need, each with proof links | `lib/pip-search.ts`, `app/api/pip/search/route.ts` |
 
 ---
 
@@ -51,7 +51,7 @@ Pip, a small water-droplet mascot, is the agent.
 3. At **Connect PayPal**, log in with the PayPal sandbox test buyer below. This is fake money.
 4. Approve the split. On **My plan**, press **Run payment day now**. You’ll see a PayPal order ID for each charity.
 5. In **Settings → Budget & limits**, raise the limit to $50 and save.
-6. Open **Pip’s suggestions** → **Find appeals**. Pip searches the web (up to a minute). Give **$10 once** to an appeal: it goes through. Then try **$25**: the server stops it because it’s over your limit.
+6. Open **Urgent needs**. Pip fills it with live appeals and people in need as soon as it opens (or type another need and press **Look for this**). Give **$10 once** to an appeal: it goes through. Then try **$25**: the server stops it because it’s over your limit.
 7. On **Discover**, type a cause (for example “dog rescue in Lagos”) and press **Search the web**. Add a charity Pip found, press **Share my $…**, then **Approve this plan**.
 8. **History & receipts** lists every payment with its PayPal order ID.
 
@@ -93,7 +93,7 @@ Open http://localhost:3000. The database is created automatically: a local SQLit
 | `PAYPAL_DEMO_PAYEE_EMAIL` | Payments | A sandbox **business** account email. All test gifts land here |
 | `PAYPAL_TEST_BUYER_EMAIL`, `PAYPAL_TEST_BUYER_PASSWORD` | Optional | A sandbox **personal** account, shown on the Connect PayPal step |
 | `PAYPAL_WEBHOOK_ID` | Optional | Your app → Webhooks, pointing at `https://<your-site>/api/paypal/webhook` |
-| `TAVILY_API_KEY` | Pip’s web research | app.tavily.com (free plan: about 1,000 credits a month; each search uses 2) |
+| `TAVILY_API_KEY` | Pip’s web research | app.tavily.com (free plan: about 1,000 credits a month; each search uses 3) |
 | `ANTHROPIC_API_KEY` | Pip’s web research | console.anthropic.com → API keys |
 | `PIP_MODEL` | Optional | Defaults to `claude-haiku-5-5` (about $0.01 a search) |
 | `PIP_HOURLY_LIMIT`, `PIP_DAILY_LIMIT` | Optional | New Pip searches allowed (defaults: 5 per person per hour, 15 a day in total) |
@@ -107,7 +107,7 @@ Check a production build with `npx next build`.
 
 ## What’s real and what’s sample data
 
-**Real:** accounts, PayPal connection, plans and limits, payment day, one-off gifts, payment history, Pip’s web research on Discover, and urgent appeals on Pip’s suggestions.
+**Real:** accounts, PayPal connection, plans and limits, payment day, one-off gifts, payment history, Pip’s web research on Discover, and urgent appeals and people in need on Urgent needs.
 
 **No sample data.** Every charity in the app was found by Pip on the live web, and every number comes from your real plan and PayPal payments. Pip’s weekly check and impact reports aren’t built yet, so those sections say “coming” instead of showing made-up examples.
 

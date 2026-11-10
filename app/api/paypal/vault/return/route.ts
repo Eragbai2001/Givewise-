@@ -8,7 +8,8 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const origin = appOrigin(req);
   const to = url.searchParams.get("to") === "plan" ? "plan" : "onboarding";
-  const back = (q: string) => Response.redirect(`${origin}/${to}?${q}`, 303);
+  const tab = url.searchParams.get("tab") === "1";
+  const back = (q: string) => Response.redirect(tab ? `${origin}/paypal/done?to=${to}&${q}` : `${origin}/${to}?${q}`, 303);
 
   const user = await currentUser(req);
   if (!user) return Response.redirect(`${origin}/login`, 303);

@@ -4,14 +4,14 @@ import Link from "next/link";
 import EmptyState from "@/components/app/EmptyState";
 import LiveAppeals from "@/components/app/LiveAppeals";
 
-/** Pip's suggestions: live urgent appeals Pip found on the web. No sample data. */
+/** Urgent needs: live appeals and people in need Pip found on the web. No sample data. */
 export default function SuggestionsView() {
   return (
     <main className="content">
       <div className="head">
         <div>
-          <h1>Pip’s suggestions</h1>
-          <p>Urgent appeals Pip found on the web, each with sources. Pip suggests. Only you decide.</p>
+          <h1>Urgent needs</h1>
+          <p>Appeals and people in need right now, found by Pip on the web with sources. For one-off gifts. Only you decide.</p>
         </div>
       </div>
 

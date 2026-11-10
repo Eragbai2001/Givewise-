@@ -463,7 +463,7 @@ function Notifications() {
   const tg = (k: keyof typeof on) => (v: boolean) => setOn((o) => ({ ...o, [k]: v }));
   return (
     <Row title="Notifications" desc="Choose what Pip tells you about. Pip never sends more than one nudge a day.">
-      <Switch label="Pip’s suggestions" desc="Urgent appeals, matches and changes to your split." on={on.prop} set={tg("prop")} />
+      <Switch label="Urgent needs and suggestions" desc="Urgent appeals, matches and changes to your split." on={on.prop} set={tg("prop")} />
       <Switch label="Payment confirmations" desc="When each monthly gift goes through." on={on.paid} set={tg("paid")} />
       <Switch label="Payment problems" desc="Always on, so a failed gift never goes unnoticed." on locked />
       <Switch label="Impact updates" desc="When a charity shares results." on={on.impact} set={tg("impact")} />

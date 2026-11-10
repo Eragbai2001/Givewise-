@@ -1,4 +1,5 @@
 import { getConnection, getLimits, getPlan, givenThisMonth, paidThisMonth, recentPayments, releaseStalePending } from "@/lib/payments";
+import { foundFor } from "@/lib/pip-search";
 import { currentUser } from "@/lib/session";
 
 export async function GET(req: Request) {
@@ -13,6 +14,8 @@ export async function GET(req: Request) {
     givenThisMonth(user.id),
     paidThisMonth(user.id),
   ]);
+  // What Pip found about each charity in the plan: sources, confidence, what they do.
+  const found = await foundFor(user.id, plan.items.map((i) => i.charityId)).catch(() => ({}) as Awaited<ReturnType<typeof foundFor>>);
   const sandbox = process.env.PAYPAL_ENV !== "live";
   const testEmail = process.env.PAYPAL_TEST_BUYER_EMAIL;
   const testPassword = process.env.PAYPAL_TEST_BUYER_PASSWORD;
@@ -28,7 +31,7 @@ export async function GET(req: Request) {
     planSaved: plan.saved,
     // Charities whose gift for this month has already gone out.
     paidCharityIds: paidIds,
-    plan: plan.items,
+    plan: plan.items.map((i) => ({ ...i, details: found[i.charityId] ?? null })),
     payments,
   });
 }

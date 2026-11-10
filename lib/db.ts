@@ -52,6 +52,10 @@ export function ensureAppTables() {
          month TEXT NOT NULL, status TEXT NOT NULL, order_id TEXT, capture_id TEXT, error TEXT, created_at TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS gw_pip_cache (
          key TEXT PRIMARY KEY, result TEXT NOT NULL, created_at TEXT NOT NULL)`,
+      // What Pip found for each donor (server-checked), so My plan can show sources later.
+      `CREATE TABLE IF NOT EXISTS gw_found (
+         user_id TEXT NOT NULL, charity_id TEXT NOT NULL, data TEXT NOT NULL, updated_at TEXT NOT NULL,
+         PRIMARY KEY (user_id, charity_id))`,
     ];
     for (const s of ddl) await query(s);
   })();

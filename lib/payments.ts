@@ -93,10 +93,15 @@ export async function getPlan(userId: string) {
 
 /** Charities Pip found on the web have ids starting "live-". Anything else is refused. */
 export const isRealCharity = (charityId: string) => charityId.startsWith("live-");
+/** People in need Pip found can get one-off gifts, never a monthly plan. */
+export const isPerson = (charityId: string) => charityId.startsWith("live-person-");
 
 export async function savePlan(userId: string, items: { charityId: string; charityName: string; amountCents: number; payeeEmail?: string | null }[]) {
   if (items.some((i) => !isRealCharity(i.charityId))) {
     throw new LimitError("Only charities Pip found and checked can be in your plan.");
+  }
+  if (items.some((i) => isPerson(i.charityId))) {
+    throw new LimitError("People in need can get a one-off gift, but they can’t be in a monthly plan.");
   }
   const { hardLimitCents } = await getLimits(userId);
   const total = items.reduce((s, i) => s + i.amountCents, 0);

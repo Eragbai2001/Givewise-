@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { FoundCharity } from "@/lib/pip-search";
 
 export type RealPayment = { id: string; charityName: string; amountCents: number; kind: string; status: string; orderId: string | null; error: string | null; createdAt: string };
 export type RealStatus = {
@@ -12,7 +13,8 @@ export type RealStatus = {
   givenThisMonthCents: number;
   planSaved: boolean;
   paidCharityIds: string[];
-  plan: { charityId: string; charityName: string; amountCents: number }[];
+  // details = what Pip found (sources, confidence). null for charities saved before Pip kept them.
+  plan: { charityId: string; charityName: string; amountCents: number; details: (FoundCharity & { checkedAt: string }) | null }[];
   payments: RealPayment[];
 };
 

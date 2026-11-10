@@ -65,7 +65,10 @@
 .rlist div:last-child{border-bottom:0}
 .rlist .st{width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none}
 .rlist .st.ok{background:var(--accent);color:var(--on-accent)}
-.rlist .st.go{border:2px solid var(--accent);border-right-color:transparent}
+.rlist .st.go{border:2px solid var(--accent);border-right-color:transparent;animation:gw-spin .9s linear infinite}
+@keyframes gw-spin{to{transform:rotate(360deg)}}
+/* A loading spinner is essential progress, so keep it turning (slowly) even with reduced motion. */
+@media (prefers-reduced-motion: reduce){ .rlist .st.go{animation:gw-spin 1.6s linear infinite !important} }
 .rlist .st.wait{border:2px solid var(--line2)}
 .rlist .m{margin-left:auto;font-size:12px;color:var(--muted)}
 .sugg{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}

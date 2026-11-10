@@ -6,13 +6,16 @@ import Pip from "@/components/Pip";
 import { I, Ic } from "@/components/app/icons";
 import EmptyState from "@/components/app/EmptyState";
 import PaymentPanel from "@/components/app/PaymentPanel";
+import { FoundCard } from "@/components/app/LiveSearch";
 import { usePayments } from "@/lib/use-payments";
+import { useOnboarded } from "@/lib/onboarding";
 
 const PER_PAGE = 6;
 const money = (n: number) => `$${n.toFixed(2)}`;
 
 export default function PlanView() {
   const { status, loaded, reload } = usePayments();
+  const onboarded = useOnboarded();
 
   const charities = (status?.plan ?? []).map((i, n) => {
     const words = i.charityName.split(/\s+/).filter(Boolean);
@@ -117,8 +120,14 @@ export default function PlanView() {
               <li><span className="n">4</span>Approve your split</li>
             </ol>
             <div className="setup-actions">
-              <Link className="btn btn-primary" href="/onboarding">Set up with Pip</Link>
-              <Link className="btn" href="/discover">Browse charities first</Link>
+              {onboarded ? (
+                <Link className="btn btn-primary" href="/discover">Find charities with Pip</Link>
+              ) : (
+                <>
+                  <Link className="btn btn-primary" href="/onboarding">Set up with Pip</Link>
+                  <Link className="btn" href="/discover">Browse charities first</Link>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -219,31 +228,43 @@ export default function PlanView() {
         <div className="card-h"><h2 id="ch-h">Your charities</h2>{hasPlan && <Link className="btn btn-sm" href="/discover">View all</Link>}</div>
         {hasPlan ? (
           <>
-        <div className="tbl-wrap">
-          <table className="tbl">
-            <thead><tr><th>Charity</th><th>Cause</th><th>Monthly</th><th>Giving since</th><th>Status</th><th>Last checked</th><th><span className="sr-only">Actions</span></th></tr></thead>
-            <tbody>
-              {charities.map((c) => (
-                <tr key={c.id}>
-                  <td><span className="org"><span className="logo-ph" style={{ background: c.tint, color: c.ink }}>{c.ini}</span>{c.name}</span></td>
-                  <td style={{ color: "var(--text2)" }}>{c.cause}</td>
-                  <td className="num" style={{ fontWeight: 500 }}>{money(c.amount)}</td>
-                  <td className="num" style={{ color: "var(--text2)" }}>{c.since}</td>
-                  <td><span className={`chip ${c.status.chip}`}><i />{c.status.label}</span></td>
-                  <td className="num" style={{ color: "var(--text2)" }}>{c.checked}</td>
-                  <td><button className="iconbtn sq" aria-label={`More for ${c.short}`} style={{ borderColor: "transparent", background: "transparent" }}><Ic d={I.dots} /></button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mlist">
-          {charities.map((c) => (
-            <div key={c.id}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><span className="logo-ph" style={{ background: c.tint, color: c.ink }}>{c.ini}</span><span style={{ flex: 1, fontWeight: 500 }}>{c.name}</span><span className="num" style={{ fontWeight: 600 }}>${c.amount}</span></div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "center", paddingLeft: 42 }}><span className={`chip ${c.status.chip}`}><i />{c.status.label}</span><span style={{ fontSize: 12, color: "var(--muted)" }}>{c.cause}</span></div>
-            </div>
-          ))}
+        <p className="plan-ch-note">What Pip found about each charity, with the links to check it yourself.</p>
+        <div className="results plan-ch">
+          {(status?.plan ?? []).map((item) => {
+            const paidNow = status?.paidCharityIds.includes(item.charityId);
+            const foot = (
+              <div className="plan-ch-foot">
+                <span className="num"><b>{money(item.amountCents / 100)}</b> a month</span>
+                <span className={`chip ${paidNow ? "ok" : "neutral"}`}><i />{paidNow ? "Paid this month" : "In your plan"}</span>
+                {item.details && (
+                  <span className="plan-ch-date">Checked {new Date(item.details.checkedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                )}
+              </div>
+            );
+            if (item.details) {
+              return <FoundCard key={item.charityId} f={item.details}>{foot}</FoundCard>;
+            }
+            // Saved before Pip kept its findings: show what we have and how to see the sources again.
+            const words = item.charityName.split(/\s+/).filter(Boolean);
+            return (
+              <article key={item.charityId} className="ccard" aria-label={item.charityName}>
+                <div className="top">
+                  <span className="logo-ph" style={{ background: "var(--grey-soft)", color: "var(--grey-ink)" }}>
+                    {((words[0]?.[0] ?? "?") + (words[1]?.[0] ?? "")).toUpperCase()}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+                    <h3>{item.charityName}</h3>
+                    <span className="loc">Found by Pip</span>
+                  </div>
+                </div>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
+                  This charity was added before Pip started keeping its sources. Search for it on Discover to see what Pip found and the links to check it.
+                </p>
+                <Link className="src" href={`/discover?q=${encodeURIComponent(item.charityName)}`}>Look it up on Discover ↗</Link>
+                {foot}
+              </article>
+            );
+          })}
         </div>
           </>
         ) : (

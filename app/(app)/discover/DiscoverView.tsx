@@ -27,6 +27,14 @@ export default function DiscoverView() {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
 
+  // A link like /discover?q=Water.org starts with that search typed in (e.g. from My plan).
+  useEffect(() => {
+    try {
+      const v = new URLSearchParams(window.location.search).get("q");
+      if (v) setQ(v.slice(0, 120));
+    } catch {}
+  }, []);
+
   // The donor's real limit and saved plan (null when logged out or still loading).
   const { status } = usePayments();
   const LIMIT = status ? status.hardLimitCents / 100 : 50;

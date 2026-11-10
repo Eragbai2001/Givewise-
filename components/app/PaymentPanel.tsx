@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { I, Ic } from "@/components/app/icons";
 import TestLoginNote, { type TestLogin } from "@/components/TestLoginNote";
 import { paymentsChanged } from "@/lib/use-payments";
+import { connectPaypal, onPaypalResult } from "@/lib/paypal-connect";
 
 type Payment = { id: string; charityName: string; amountCents: number; kind: string; status: string; orderId: string | null; error: string | null; createdAt: string };
 type Status = {
@@ -33,6 +34,8 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
   const [busy, setBusy] = useState<"" | "connect" | "run">("");
   const [error, setError] = useState(params.get("paypal") === "error" ? params.get("msg") ?? "PayPal couldn’t be connected." : "");
   const [results, setResults] = useState<RunResult[] | null>(null);
+  // PayPal is open in another tab.
+  const [waiting, setWaiting] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/payments/status", { cache: "no-store" }).catch(() => null);
@@ -44,17 +47,27 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
     load();
   }, [load]);
 
+  // The PayPal tab tells us when it's done.
+  useEffect(
+    () =>
+      onPaypalResult((r) => {
+        setWaiting(false);
+        if (r.paypal === "connected") setError("");
+        else setError(r.paypal === "cancelled" ? "You cancelled at PayPal, so nothing was connected." : r.msg || "PayPal couldn’t be connected.");
+        load().then(() => paymentsChanged());
+        onChanged?.();
+      }),
+    [load, onChanged],
+  );
+
   async function connect() {
     setError("");
     setBusy("connect");
-    const r = await fetch("/api/paypal/vault/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: "plan" }) }).catch(() => null);
-    const d = await r?.json().catch(() => ({}));
-    if (r?.ok && d?.url) {
-      window.location.href = d.url;
-      return;
-    }
-    setError(d?.error || "PayPal couldn’t be reached. Please try again.");
+    const r = await connectPaypal("plan");
+    if (r.status === "redirected") return;
     setBusy("");
+    if (r.status === "opened") setWaiting(true);
+    else setError(r.error || "PayPal couldn’t be reached. Please try again.");
   }
 
   async function run() {
@@ -111,9 +124,14 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
             </p>
             <div>
               <button className="btn btn-pp" onClick={connect} disabled={busy !== ""} aria-busy={busy === "connect"}>
-                {busy === "connect" ? "Opening PayPal…" : "Connect PayPal"}
+                {busy === "connect" ? "Opening PayPal…" : waiting ? "Open PayPal again" : "Connect PayPal"}
               </button>
             </div>
+            {waiting && (
+              <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
+                PayPal is open in a new tab. Finish there and this card will update by itself.
+              </p>
+            )}
             <TestLoginNote login={s.testLogin} />
           </>
         ) : (

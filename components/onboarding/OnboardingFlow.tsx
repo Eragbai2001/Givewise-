@@ -7,6 +7,7 @@ import Pip from "../Pip";
 import { PipLogo } from "../Pip";
 import ThemeToggle from "../ThemeToggle";
 import TestLoginNote, { type TestLogin } from "../TestLoginNote";
+import { connectPaypal as openPaypal, onPaypalResult, type PaypalResult } from "@/lib/paypal-connect";
 import { markOnboarded } from "@/lib/onboarding";
 import { toCharity } from "@/components/app/LiveSearch";
 import type { SearchResult } from "@/lib/pip-search";
@@ -41,7 +42,7 @@ function fitTo(items: SplitItem[], budget: number): SplitItem[] {
 /** Pip's split from live research: up to 3 charities it could back with sources. Verified ones get twice the share. */
 function liveSplit(res: SearchResult, budget: number): SplitItem[] {
   const picks = (res.results ?? [])
-    .filter((f) => f.confidence !== "none")
+    .filter((f) => f.type !== "person" && f.confidence !== "none") // people in need get one-off gifts, never a monthly split
     .sort((a, b) => (a.confidence === b.confidence ? 0 : a.confidence === "verified" ? -1 : 1))
     .slice(0, 3);
   if (!picks.length) return [];
@@ -115,6 +116,8 @@ export default function OnboardingFlow() {
   const [ppError, setPpError] = useState("");
   const [ppEmail, setPpEmail] = useState<string | null>(null);
   const [testLogin, setTestLogin] = useState<TestLogin | null>(null);
+  // PayPal is open in another tab and we're waiting for it to finish.
+  const [ppWaiting, setPpWaiting] = useState(false);
 
   // Sandbox: fetch the fake PayPal login to show on the Connect PayPal step.
   useEffect(() => {
@@ -125,7 +128,27 @@ export default function OnboardingFlow() {
       .catch(() => {});
   }, [step, testLogin]);
 
-  // Coming back from PayPal: restore the answers, then continue after a good approval, or explain what happened.
+  // PayPal finished: continue after a good approval, or explain what happened.
+  function paypalDone(r: string, msg?: string | null) {
+    setPpWaiting(false);
+    setPpBusy(false);
+    if (r === "connected") {
+      setPpError("");
+      setStep(5);
+    } else {
+      setStep(4);
+      setPpError(r === "cancelled" ? "You cancelled at PayPal, so nothing was connected." : msg || "PayPal couldn’t be connected.");
+    }
+    fetch("/api/payments/status")
+      .then((x) => (x.ok ? x.json() : null))
+      .then((d) => d?.paypalEmail && setPpEmail(d.paypalEmail))
+      .catch(() => {});
+  }
+
+  // PayPal opened in a new tab tells this tab when it's done.
+  useEffect(() => onPaypalResult((r: PaypalResult) => paypalDone(r.paypal, r.msg)), []);
+
+  // Coming back from PayPal in this same tab: restore the answers first.
   useEffect(() => {
     const r = params.get("paypal");
     if (!r) return;
@@ -139,15 +162,7 @@ export default function OnboardingFlow() {
         if (typeof a.words === "string") setWords(a.words);
       }
     } catch {}
-    if (r === "connected") setStep(5);
-    else {
-      setStep(4);
-      setPpError(r === "cancelled" ? "You cancelled at PayPal, so nothing was connected." : params.get("msg") || "PayPal couldn’t be connected.");
-    }
-    fetch("/api/payments/status")
-      .then((x) => (x.ok ? x.json() : null))
-      .then((d) => d?.paypalEmail && setPpEmail(d.paypalEmail))
-      .catch(() => {});
+    paypalDone(r, params.get("msg"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -163,21 +178,14 @@ export default function OnboardingFlow() {
     saveAnswers();
     setPpError("");
     setPpBusy(true);
-    try {
-      const res = await fetch("/api/paypal/vault/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: "onboarding" }) });
-      const d = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        setPpError("Log in first, then connect PayPal.");
-      } else if (!res.ok || !d.url) {
-        setPpError(d.error || "PayPal couldn’t be reached. Please try again.");
-      } else {
-        window.location.href = d.url;
-        return;
-      }
-    } catch {
-      setPpError("PayPal couldn’t be reached. Please try again.");
-    }
+    const r = await openPaypal("onboarding");
+    if (r.status === "redirected") return; // leaving this page
     setPpBusy(false);
+    if (r.status === "opened") {
+      setPpWaiting(true);
+      return;
+    }
+    setPpError(r.code === 401 ? "Log in first, then connect PayPal." : r.error || "PayPal couldn’t be reached. Please try again.");
   }
 
   async function approvePlan() {
@@ -472,6 +480,11 @@ export default function OnboardingFlow() {
             <p className="setup-hint" style={{ marginTop: 0 }}>
               No bank connection needed. You can disconnect any time in Settings.
             </p>
+            {ppWaiting && (
+              <p className="setup-hint" role="status" style={{ marginTop: 0 }}>
+                PayPal is open in a new tab. Finish there and this page will move on by itself.
+              </p>
+            )}
             <TestLoginNote login={testLogin} />
           </>
         )}
@@ -642,10 +655,11 @@ export default function OnboardingFlow() {
             <button
               className={`btn btn-block ${step === 4 ? "btn-pp" : "btn-primary"}`}
               onClick={step === 4 ? connectPaypal : step === 6 && sample ? () => { setSplit(null); setStep(5); } : next}
-              disabled={ppBusy}
-              aria-busy={ppBusy}
+              // Wait for Pip's research before showing the split.
+              disabled={ppBusy || (step === 5 && research < 4)}
+              aria-busy={ppBusy || (step === 5 && research < 4)}
             >
-              {step === 4 && ppBusy ? "Opening PayPal…" : step === 6 && sample ? "Ask Pip to search again" : CTA[step]}
+              {step === 4 && ppBusy ? "Opening PayPal…" : step === 4 && ppWaiting ? "Open PayPal again" : step === 5 && research < 4 ? "Pip is still checking…" : step === 6 && sample ? "Ask Pip to search again" : CTA[step]}
             </button>
             {step === 4 && ppError && (
               <p className="form-err" role="alert" style={{ margin: 0 }}>

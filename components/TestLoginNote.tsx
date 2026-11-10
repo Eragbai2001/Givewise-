@@ -22,8 +22,8 @@ export default function TestLoginNote({ login }: { login: TestLogin | null | und
   return (
     <div className="testlogin" role="note">
       <p className="testlogin-t">
-        <b>Trying GiveWise?</b> This is PayPal’s test mode, so no real money moves. On PayPal’s page, enter this email, click{" "}
-        <b>Next</b>, then the password. Skip the card form.
+        <b>Trying GiveWise?</b> This is PayPal’s test mode, so no real money moves. PayPal opens in a new tab, so this login stays
+        here. On PayPal’s page, enter this email, click <b>Next</b>, then the password. Skip the card form.
       </p>
       <dl>
         <div>

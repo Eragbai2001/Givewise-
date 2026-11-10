@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import EmptyState from "@/components/app/EmptyState";
 import { I, Ic } from "@/components/app/icons";
 import { usePayments, type RealPayment } from "@/lib/use-payments";
+import { useOnboarded } from "@/lib/onboarding";
 
 type Row = { t: "pay" | "you" | "pip"; date: string; what: string; charity: string; by: string; amount: string; status: string; chip: string; ref?: string | null };
 
@@ -89,7 +90,7 @@ export default function HistoryView() {
             icon={I.file}
             title="No history yet"
             body="Every payment will be listed here with its PayPal order ID. Nothing is ever paid without your approval."
-            action={<Link className="btn btn-primary btn-sm" href="/onboarding">Set up with Pip</Link>}
+            action={<NextStep />}
           />
         </section>
       ) : (
@@ -164,4 +165,14 @@ export default function HistoryView() {
       </p>
     </main>
   );
+}
+
+/** Where to go when there's no history yet. Setup is only offered to donors who haven't done it. */
+function NextStep() {
+  const onboarded = useOnboarded();
+  const { status } = usePayments();
+  if (onboarded === null) return null;
+  if (!onboarded) return <Link className="btn btn-primary btn-sm" href="/onboarding">Set up with Pip</Link>;
+  if (status?.planSaved) return <Link className="btn btn-primary btn-sm" href="/plan">Go to My plan</Link>;
+  return <Link className="btn btn-primary btn-sm" href="/discover">Find charities with Pip</Link>;
 }

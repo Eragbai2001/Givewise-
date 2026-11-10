@@ -22,8 +22,8 @@ An AI giving agent. Pip — a water-droplet mascot — finds and verifies charit
 - No Pip on the log in / sign up pages (copy there is about charity). Onboarding uses Pip.
 - Pip's face is the logo (`PipLogo` in `components/Pip.tsx`).
 - No visible scrollbars, no horizontal scrolling anywhere.
-- Sidebar order: My plan, Discover, Pip's suggestions, Impact, History & receipts; then Settings. The sidebar can collapse to an icon rail (remembered in localStorage `gw-side`).
-- Open question (not decided yet): fold Pip's suggestions into Discover? Ask Jaime before changing.
+- Sidebar order: My plan, Discover, Urgent needs, Impact, History & receipts; then Settings. The sidebar can collapse to an icon rail (remembered in localStorage `gw-side`).
+- **Decided 10 Nov:** "Pip's suggestions" is renamed **Urgent needs** (route stays `/suggestions`). Discover = build the monthly plan; Urgent needs = one-off gifts. Urgent needs fills itself on open with a fixed default search (shared, so usually served from the 6h cache); the search box is only for looking up something else. If a new search can't run (limit or web error), Pip shows its last saved result for that query, marked `stale`.
 
 ## Stack
 
@@ -108,9 +108,14 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 
 ## Pip's research agent
 
-- `lib/pip-search.ts` + `POST /api/pip/search`: **Tavily** (`TAVILY_API_KEY`, 2 basic searches = 2 credits: general + news) finds pages, then **Claude Haiku 5.5** (`ANTHROPIC_API_KEY`, `PIP_MODEL` to override) reads them and returns charities as JSON. Switched from Opus + Claude web search on 10 Nov 2026 because that cost $0.30–0.60 a search; now about $0.01 plus Tavily's free tier (~1,000 credits/month).
+- `lib/pip-search.ts` + `POST /api/pip/search`: **Tavily** (`TAVILY_API_KEY`, 3 basic searches = 3 credits: general + news + social/fundraiser sites via `include_domains`) finds pages, then **Claude Haiku 5.5** (`ANTHROPIC_API_KEY`, `PIP_MODEL` to override) reads them and returns charities as JSON. Switched from Opus + Claude web search on 10 Nov 2026 because that cost $0.30–0.60 a search; now about $0.01 plus Tavily's free tier (~1,000 credits/month).
 - Trust rules are enforced in code: a proof link only counts if that exact URL came back from Tavily; confidence is recomputed (verified needs ≥2 domains incl. a registry/report/news source; the model can only lower it). Tested offline.
 - Social posts (Instagram/X) only appear if web search indexes them. We do not scrape those platforms (ToS, and unreliable).
+- **Streaming + people in need (10 Nov, decided with Jaime):** the model writes one JSON finding per line; the server checks each (`cleanItem`) and streams it (`{ stream: true }` → NDJSON), so cards appear in a few seconds (`lib/use-pip-search.ts`). Findings have `type: "charity" | "person"`. People (surgery, war victims…) come from news, GoFundMe and public X/Instagram/Threads/Facebook posts; a person with no valid link is dropped, social/fundraiser links can never count as news/registry, and social-only findings get a red flag. People get one-click **Give once** (`components/app/GiveOnce.tsx`) through the donor's PayPal, never a monthly plan (ids `live-person-…`, `savePlan` refuses them; onboarding's split skips them). Jaime's longer-term plan: people in need register on GiveWise with their own payout details (separate page), not built yet.
+- Every finding is also saved per donor in `gw_found` (`rememberFound` / `foundFor` in `lib/pip-search.ts`, id from `lib/found-id.ts`). `/api/payments/status` adds `details` to each plan item, and **My plan → Your charities** shows them as cards with sources (older plan items fall back to a "Look it up on Discover" link; Discover reads `?q=`).
+- While searching, `components/app/PipSearching.tsx` shows Pip, a step checklist with a spinner and skeleton cards.
+- "Set up with Pip" (History empty state, My plan setup card) only shows for donors who haven't onboarded (`useOnboarded()` in `lib/onboarding.ts`); others get "Find charities with Pip" or "Go to My plan".
+- Cards: `FoundCard` in `LiveSearch.tsx` (shared with `LiveAppeals.tsx`) has a "Check it yourself" sources block, website/donate/fundraiser links. Cache key prefix is `s2:`.
 - Cached 6h per query (`gw_pip_cache`). New searches capped at 5/user/hour and 15/day across everyone (`PIP_HOURLY_LIMIT`, `PIP_DAILY_LIMIT`) to protect the API budget.
 - UI: `components/app/LiveSearch.tsx` on Discover. Found charities can be added to picks.
 - Urgent appeals: `components/app/LiveAppeals.tsx` at the top of Pip's suggestions. It asks `/api/pip/search` for charities with a current appeal, hides "Couldn't verify" ones, and "Give $X once" (after a confirm) calls `POST /api/payments/give`. Below it, an empty state says weekly suggestions are coming.
@@ -128,7 +133,7 @@ Done on 10 Nov:
 
 Next steps, in order:
 1. **Jaime is testing the full flow from onboarding** with a fresh account: sign up as `name+test1@…` (a "+" alias = new account, same inbox). Any password with 10+ characters and a number. Check: causes → $25 budget → Connect PayPal → Pip's live search → approve split → My plan "Run payment day now" → History / Impact / Settings → PayPal show real data → Pip's suggestions "Find appeals". Fix whatever breaks.
-2. **Fix (reported by Jaime): the sandbox test buyer login is shown on the Connect PayPal step, before the redirect, so it's gone once PayPal's page opens.** You can't copy both email and password before leaving, so you have to go back. Idea: make each value one-tap copy and keep them visible, e.g. a small "Copy email" / "Copy password" pair, or open PayPal in a new tab/popup so the GiveWise page (with the login) stays open. Component: `components/TestLoginNote.tsx`, used in `OnboardingFlow.tsx` step 5 (index 4) and wherever "Connect PayPal" appears.
+2. **Done (10 Nov, not yet deployed):** Connect PayPal now opens PayPal in a **new tab** (`lib/paypal-connect.ts`), so the test login stays visible. The PayPal tab ends on `/paypal/done`, which tells the GiveWise tab the result (BroadcastChannel, localStorage fallback) and closes itself. If the popup is blocked, it falls back to the same-tab redirect. Used in onboarding step 5 and `PaymentPanel`. Also fixed: the research checklist spinner now spins, and "See my split" is disabled until Pip's search finishes.
 3. Offered, not yet decided: a "Start over" button (Settings → Security) that clears plan, limits and PayPal connection and sends the user back to onboarding, keeping payment history. Ask Jaime.
 4. Offered, not yet decided: run the Next.js security upgrade (`next upgrade --agent=security`), ideally in a separate git worktree. Ask Jaime.
 5. README `TODO`s: live URL (confirm), YouTube demo link, PayPal sandbox buyer login, optional GiveWise test account.
