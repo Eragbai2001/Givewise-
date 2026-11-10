@@ -117,9 +117,26 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 - Discover → "Approve this plan" saves the split with `POST /api/payments/plan` (live charities keep their `live-…` ids). In sandbox every gift is paid to `PAYPAL_DEMO_PAYEE_EMAIL`, and the UI says so.
 - Each Pip search logs its tokens and an estimated cost to the server console. Cached repeats are free.
 
+## Where we stopped (10 Nov 2026) — pick up here
+
+Deadline is **12 Nov 2026**. Live: https://givewise-seven.vercel.app (deployed from commit `b26d502`, deploy succeeded).
+
+Done on 10 Nov:
+- Pip search moved to Tavily + Claude Haiku 5.5 (see "Pip's research agent"). Jaime added `TAVILY_API_KEY` in Vercel and redeployed.
+- All mock data removed from the signed-in app (see "Real data only" above).
+- Google sign-in "isn't set up" on the first click fixed (buttons wait for `/api/me`).
+
+Next steps, in order:
+1. **Jaime is testing the full flow from onboarding** with a fresh account: sign up as `name+test1@…` (a "+" alias = new account, same inbox). Any password with 10+ characters and a number. Check: causes → $25 budget → Connect PayPal → Pip's live search → approve split → My plan "Run payment day now" → History / Impact / Settings → PayPal show real data → Pip's suggestions "Find appeals". Fix whatever breaks.
+2. **Fix (reported by Jaime): the sandbox test buyer login is shown on the Connect PayPal step, before the redirect, so it's gone once PayPal's page opens.** You can't copy both email and password before leaving, so you have to go back. Idea: make each value one-tap copy and keep them visible, e.g. a small "Copy email" / "Copy password" pair, or open PayPal in a new tab/popup so the GiveWise page (with the login) stays open. Component: `components/TestLoginNote.tsx`, used in `OnboardingFlow.tsx` step 5 (index 4) and wherever "Connect PayPal" appears.
+3. Offered, not yet decided: a "Start over" button (Settings → Security) that clears plan, limits and PayPal connection and sends the user back to onboarding, keeping payment history. Ask Jaime.
+4. Offered, not yet decided: run the Next.js security upgrade (`next upgrade --agent=security`), ideally in a separate git worktree. Ask Jaime.
+5. README `TODO`s: live URL (confirm), YouTube demo link, PayPal sandbox buyer login, optional GiveWise test account.
+6. Demo video.
+
 ## Status (9 Nov 2026)
 
-- Pushed to GitHub `main`; Vercel deploys from it. `ANTHROPIC_API_KEY` goes in Vercel's environment variables only (the dev laptop is a public PC: no `.env.local` is kept on it). Needs a redeploy after adding.
+- Pushed to GitHub `main`; Vercel deploys from it. `ANTHROPIC_API_KEY` and `TAVILY_API_KEY` go in Vercel's environment variables only (the dev laptop is a public PC: no `.env.local` is kept on it). Needs a redeploy after adding.
 - Submission checklist: MIT `LICENSE` added; README is judge-ready but still has `TODO`s (live URL, YouTube link, PayPal sandbox buyer login, optional GiveWise test account).
 - `next build` stops once on a Next.js security notice (it passes when run again). Upgrade Next.js if the Vercel build fails.
 - Impact shows real totals per charity from completed payments. Pip's weekly check and weekly suggestions aren't built: they show "coming" empty states.
