@@ -135,7 +135,7 @@ Next steps, in order:
 1. **Jaime is testing the full flow from onboarding** with a fresh account: sign up as `name+test1@…` (a "+" alias = new account, same inbox). Any password with 10+ characters and a number. Check: causes → $25 budget → Connect PayPal → Pip's live search → approve split → My plan "Run payment day now" → History / Impact / Settings → PayPal show real data → Pip's suggestions "Find appeals". Fix whatever breaks.
 2. **Done (10 Nov, not yet deployed):** Connect PayPal now opens PayPal in a **new tab** (`lib/paypal-connect.ts`), so the test login stays visible. The PayPal tab ends on `/paypal/done`, which tells the GiveWise tab the result (BroadcastChannel, localStorage fallback) and closes itself. If the popup is blocked, it falls back to the same-tab redirect. Used in onboarding step 5 and `PaymentPanel`. Also fixed: the research checklist spinner now spins, and "See my split" is disabled until Pip's search finishes.
 3. Offered, not yet decided: a "Start over" button (Settings → Security) that clears plan, limits and PayPal connection and sends the user back to onboarding, keeping payment history. Ask Jaime.
-4. Offered, not yet decided: run the Next.js security upgrade (`next upgrade --agent=security`), ideally in a separate git worktree. Ask Jaime.
+4. **Done (10 Nov):** Next.js upgraded 16.4.0 → 16.4.6 (fixes 3 critical advisories: RCE in image optimization with SVGs, RCE in `use cache`, Server Actions DoS). `npm audit` is clean.
 5. README `TODO`s: live URL (confirm), YouTube demo link, PayPal sandbox buyer login, optional GiveWise test account.
 6. Demo video.
 
@@ -143,7 +143,7 @@ Next steps, in order:
 
 - Pushed to GitHub `main`; Vercel deploys from it. `ANTHROPIC_API_KEY` and `TAVILY_API_KEY` go in Vercel's environment variables only (the dev laptop is a public PC: no `.env.local` is kept on it). Needs a redeploy after adding.
 - Submission checklist: MIT `LICENSE` added; README is judge-ready but still has `TODO`s (live URL, YouTube link, PayPal sandbox buyer login, optional GiveWise test account).
-- `next build` stops once on a Next.js security notice (it passes when run again). Upgrade Next.js if the Vercel build fails.
+- Next.js is pinned to 16.4.6 (the build's security notice is gone).
 - Impact shows real totals per charity from completed payments. Pip's weekly check and weekly suggestions aren't built: they show "coming" empty states.
 - **Only charities Pip found (ids starting `live-`) can be in a plan or be paid.** `savePlan`, `runPaymentDay` and `giveOnce` refuse anything else (`isRealCharity` in `lib/payments.ts`). `getPlan` returns no items until a plan is saved; the PayPal card shows "Find charities with Pip" until then.
 - Discover is Pip's live search only (the made-up catalogue was deleted). `lib/discover-data.ts` now only holds the `Charity` type and `hear()`.
