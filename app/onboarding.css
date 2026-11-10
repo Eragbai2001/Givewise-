@@ -63,13 +63,11 @@
 .rlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow:hidden}
 .rlist div{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:14px}
 .rlist div:last-child{border-bottom:0}
-.rlist .st{width:22px;height:22px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none}
-.rlist .st.ok{background:var(--accent);color:var(--on-accent)}
-.rlist .st.go{border:2px solid var(--accent);border-right-color:transparent;animation:gw-spin .9s linear infinite}
-@keyframes gw-spin{to{transform:rotate(360deg)}}
-/* A loading spinner is essential progress, so keep it turning (slowly) even with reduced motion. */
-@media (prefers-reduced-motion: reduce){ .rlist .st.go{animation:gw-spin 1.6s linear infinite !important} }
-.rlist .st.wait{border:2px solid var(--line2)}
+.rlist .rdot{width:20px;height:20px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none;padding:0;min-height:0}
+.rlist .rdot.ok{background:var(--accent);color:var(--on-accent)}
+.rlist .rdot.go::before{content:"";width:10px;height:10px;border-radius:999px;background:var(--accent);animation:gw-pulse 1.2s ease-in-out infinite}
+.rlist .rdot.wait::before{content:"";width:8px;height:8px;border-radius:999px;background:var(--line2)}
+@keyframes gw-pulse{0%,100%{opacity:.35;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}
 .rlist .m{margin-left:auto;font-size:12px;color:var(--muted)}
 .sugg{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:16px;background:var(--surface);overflow:hidden}
 .sugg-h{display:flex;align-items:center;gap:14px;padding:14px 16px;border-bottom:1px solid var(--line)}

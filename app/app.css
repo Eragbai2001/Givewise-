@@ -300,24 +300,19 @@
 .pipload-top{display:flex;align-items:center;gap:12px}
 .pipload-top div{display:flex;flex-direction:column;gap:2px}
 .pipload-top span{font-size:12px;color:var(--muted)}
-.pipload-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2)}
-.pipload-steps li{display:flex;align-items:center;gap:10px}
-.pipload-steps li.wait{color:var(--muted)}
-.pipload-steps .st{width:18px;height:18px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none}
-.pipload-steps .st svg{width:11px;height:11px}
-.pipload-steps .st.ok{background:var(--accent);color:var(--on-accent)}
-.pipload-steps .st.go{border:2px solid var(--accent);border-right-color:transparent;animation:gw-spin .9s linear infinite}
-.pipload-steps .st.wait{border:2px solid var(--line2)}
+.pipload-time{margin-left:auto;font-size:12px;color:var(--muted)}
+.pipload-bar{height:3px;border-radius:3px;background:var(--line);overflow:hidden;position:relative}
+.pipload-bar i{position:absolute;top:0;bottom:0;left:0;width:35%;border-radius:3px;background:var(--accent);animation:gw-slide 1.4s ease-in-out infinite}
 .ccard.skel{gap:10px}
 .ccard.skel i{display:block;height:12px;border-radius:6px;background:linear-gradient(90deg,var(--subtle) 0%,var(--line) 50%,var(--subtle) 100%);background-size:200% 100%;animation:gw-shimmer 1.4s ease-in-out infinite}
 .ccard.skel i:nth-child(1){width:55%;height:16px}
 .ccard.skel i:nth-child(2){width:90%}
 .ccard.skel i:nth-child(3){width:75%}
 .ccard.skel i:nth-child(4){width:40%}
-@keyframes gw-spin{to{transform:rotate(360deg)}}
+@keyframes gw-slide{0%{transform:translateX(-100%)}100%{transform:translateX(290%)}}
 @keyframes gw-shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
-/* Progress stays visible with reduced motion: the spinner turns slowly, the shimmer stops. */
-@media (prefers-reduced-motion: reduce){ .pipload-steps .st.go{animation:gw-spin 1.6s linear infinite !important} }
+/* Reduced motion: the bar stays still at full width, the shimmer stops. The step text still says what Pip is doing. */
+@media (prefers-reduced-motion: reduce){ .pipload-bar i{width:100%;opacity:.5} }
 .added{background:var(--accent-soft);border-color:var(--accent-line);color:var(--accent-ink) !important}
 .tray{position:sticky;bottom:0;z-index:3;display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px 16px;margin:0 -2px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px rgba(16,24,20,.12)}
 .tray-avs{display:flex;flex-direction:row;align-items:center;flex:none}

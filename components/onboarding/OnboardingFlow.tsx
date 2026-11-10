@@ -506,7 +506,7 @@ export default function OnboardingFlow() {
                 const st = research > i ? "ok" : research === i ? "go" : "wait";
                 return (
                   <div key={t}>
-                    <span className={`st ${st}`} aria-hidden="true">
+                    <span className={`rdot ${st}`} aria-hidden="true">
                       {st === "ok" && <Ico small p={CHECK} />}
                     </span>
                     {t}
