@@ -38,16 +38,6 @@ function fitTo(items: SplitItem[], budget: number): SplitItem[] {
   return items;
 }
 
-/** Used only when Pip can't search (no API key, not logged in, or nothing found). Shown as sample data. */
-function sampleSplit(budget: number): SplitItem[] {
-  const base = [
-    { id: "cs", name: "ClearSpring Water Initiative", share: 0.5, why: "Builds and repairs village wells. 2025 audit published.", conf: "Verified", chip: "ok" },
-    { id: "bf", name: "Bright Futures Scholarship Fund", share: 0.3, why: "Pays school fees for girls. Reports each term.", conf: "Verified", chip: "ok" },
-    { id: "rl", name: "Roots Local Aid", share: 0.2, why: "Local food and school-supply drives. Latest report is from 2024.", conf: "Partly verified", chip: "rev" },
-  ];
-  return fitTo(base.map((b, i) => ({ id: b.id, name: b.name, why: b.why, conf: b.conf, chip: b.chip, cents: Math.round(b.share * budget * 100), color: COLORS[i], src: null })), budget);
-}
-
 /** Pip's split from live research: up to 3 charities it could back with sources. Verified ones get twice the share. */
 function liveSplit(res: SearchResult, budget: number): SplitItem[] {
   const picks = (res.results ?? [])
@@ -109,7 +99,7 @@ export default function OnboardingFlow() {
   const startAmount = Math.min(Number(params.get("amount")) || MAX_BUDGET, MAX_BUDGET);
 
   const [step, setStep] = useState(0);
-  const [name, setName] = useState("Ada");
+  const [name, setName] = useState("");
   const [picked, setPicked] = useState<Record<string, boolean>>({ water: true, girls: true });
   const [where, setWhere] = useState("mix");
   const [budget, setBudget] = useState(PRESETS.includes(startAmount) ? startAmount : MAX_BUDGET);
@@ -247,12 +237,12 @@ export default function OnboardingFlow() {
         if (live.length) finish(live, false, (d as SearchResult).summary ?? "");
         else
           finish(
-            sampleSplit(budget),
+            [],
             true,
-            ok ? "I couldn’t find charities I could back with sources for that, so here’s a sample split." : (d?.error as string) || "I couldn’t search the web just now, so here’s a sample split.",
+            ok ? "I couldn’t find charities I could back with sources for that. Try other causes or words." : (d?.error as string) || "I couldn’t search the web just now. Please try again.",
           );
       })
-      .catch(() => finish(sampleSplit(budget), true, "I couldn’t search the web just now, so here’s a sample split."));
+      .catch(() => finish([], true, "I couldn’t search the web just now. Please try again."));
     return () => {
       alive = false;
       clearInterval(id);
@@ -274,7 +264,7 @@ export default function OnboardingFlow() {
   const next = () => setStep((s) => Math.min(TOTAL - 1, s + 1));
   const back = () => setStep((s) => Math.max(0, s - 1));
   const heard = [...CAUSES.filter((c) => picked[c.id]).map((c) => c.label.toLowerCase()), ...(words.trim() ? [words.trim().toLowerCase()] : [])];
-  const shown = split ?? sampleSplit(budget);
+  const shown = split ?? [];
   const display = name.trim() || "friend";
 
   return (
@@ -490,7 +480,7 @@ export default function OnboardingFlow() {
           <>
             <div className="research">
               <Pip mood="researching" size={132} />
-              <h2>{research >= 4 ? (sample ? "Here’s a starting point" : "All checked!") : "Pip is checking charities…"}</h2>
+              <h2>{research >= 4 ? (sample ? "No match yet" : "All checked!") : "Pip is checking charities…"}</h2>
               <p>Looking for {heard.length ? heard.join(" and ") : "your causes"} groups that can show their results.</p>
             </div>
             <div className="rlist">
@@ -524,7 +514,7 @@ export default function OnboardingFlow() {
               <Pip mood="idle" size={76} />
               <div className="bubble tail-l">
                 {sample
-                  ? "I couldn’t research this live, so this is a sample split to show how it works."
+                  ? searchNote || "I couldn’t find charities I could back with sources. Let’s try again."
                   : shown.some((x) => x.chip === "rev")
                     ? "Here’s my suggestion. Some are only partly verified, so I gave them less."
                     : "Here’s my suggestion. Every charity here has sources you can open."}
@@ -542,11 +532,6 @@ export default function OnboardingFlow() {
                   ${budget}/mo
                 </strong>
               </div>
-              {sample && (
-                <div className="sitem">
-                  <span className="why2"><span className="chip neutral">Sample data</span> These aren’t real charities.</span>
-                </div>
-              )}
               {shown.map((s) => (
                 <div className="sitem" key={s.id}>
                   <div className="top">

@@ -49,16 +49,16 @@ An AI giving agent. Pip — a water-droplet mascot — finds and verifies charit
 - `app/onboarding`, `components/onboarding/OnboardingFlow.tsx`: 9 steps with Pip. The last step calls `markOnboarded()` (`lib/onboarding.ts`). "Finish later" goes to `/plan` without marking.
   - Step 2 causes include **Animals**; the "tell Pip in your own words" box is real (`words`) and shows under "Pip heard".
   - Budget presets $10/$25/$50 (max $50). Approving saves the budget as the hard limit and the split as the plan.
-  - Step 6 runs **one live Pip search** (`/api/pip/search`) from causes + words + where, and `liveSplit()` builds up to 3 charities (verified get 2× the share, whole dollars, sums to the budget, real Source links). If the search fails or finds nothing, `sampleSplit()` is shown and labelled "Sample data".
+  - Step 6 runs **one live Pip search** (`/api/pip/search`) from causes + words + where, and `liveSplit()` builds up to 3 charities (verified get 2× the share, whole dollars, sums to the budget, real Source links). If the search fails or finds nothing, Pip says so and the button becomes "Ask Pip to search again". There is no sample split.
   - Answers are kept in `sessionStorage` (`gw-onboarding-answers`) across the PayPal redirect.
-- `app/(app)/*`: the signed-in app, wrapped in `DemoStateProvider` then `AppShell` (`components/app/AppShell.tsx`).
+- `app/(app)/*`: the signed-in app, wrapped in `AppShell` (`components/app/AppShell.tsx`).
   - `plan`: My plan (donut, weekly check, charities and payments tables).
-  - `discover`: catalogue, cause filters, "ask Pip" search, picks tray, split modal.
+  - `discover`: "ask Pip" live search, picks tray, split modal.
   - `suggestions`: Pip's suggestions inbox.
-  - `impact`, `history`: receipts table with CSV export.
+  - `impact`: real totals per charity. `history`: real payments with PayPal order IDs and CSV export.
   - `settings`: 7 tabs. Shows an **"Your profile is incomplete"** notice when onboarding isn't finished.
   - `help`: placeholder.
-- `lib/*-data.ts`: **mock data**. `lib/demo-state.tsx` lets every page be viewed as `full | new | empty` (`?state=` or the dev-only "Data" switcher). Keep the empty/new states working when wiring real data.
+- **Real data only (decided 10 Nov 2026).** No mock data in the signed-in app. `lib/demo-state.tsx`, `lib/plan-data.ts` and the sample catalogue were removed. Every screen reads `usePayments()` (`/api/payments/status`) and shows an honest empty state when there's nothing yet. `lib/landing-data.ts` is only for the marketing landing page.
 - `app/app.css`: app shell and page styles. It uses **container queries** on `.gwapp` (1180px icon rail, 900px, 640px bottom nav).
 - App pages need a login: `AppShell` sends logged-out visitors to `/login` (added Nov 2026). The API routes check the session too.
 
@@ -108,21 +108,22 @@ After payments: Pip's AI (Claude API for chat and charity checks). Then a motion
 
 ## Pip's research agent
 
-- `lib/pip-search.ts` + `POST /api/pip/search`: Claude (`claude-opus-5-5`, `web_search_20260209`) researches charities on the live web. Needs `ANTHROPIC_API_KEY`.
-- Trust rules are enforced in code: a proof link only counts if that exact URL appeared in the search results; confidence is recomputed (verified needs ≥2 domains incl. a registry/report/news source; the model can only lower it). Tested offline.
+- `lib/pip-search.ts` + `POST /api/pip/search`: **Tavily** (`TAVILY_API_KEY`, 2 basic searches = 2 credits: general + news) finds pages, then **Claude Haiku 5.5** (`ANTHROPIC_API_KEY`, `PIP_MODEL` to override) reads them and returns charities as JSON. Switched from Opus + Claude web search on 10 Nov 2026 because that cost $0.30–0.60 a search; now about $0.01 plus Tavily's free tier (~1,000 credits/month).
+- Trust rules are enforced in code: a proof link only counts if that exact URL came back from Tavily; confidence is recomputed (verified needs ≥2 domains incl. a registry/report/news source; the model can only lower it). Tested offline.
 - Social posts (Instagram/X) only appear if web search indexes them. We do not scrape those platforms (ToS, and unreliable).
 - Cached 6h per query (`gw_pip_cache`). New searches capped at 5/user/hour and 15/day across everyone (`PIP_HOURLY_LIMIT`, `PIP_DAILY_LIMIT`) to protect the API budget.
 - UI: `components/app/LiveSearch.tsx` on Discover. Found charities can be added to picks.
-- Urgent appeals: `components/app/LiveAppeals.tsx` at the top of Pip's suggestions. It asks `/api/pip/search` for charities with a current appeal, hides "Couldn't verify" ones, and "Give $X once" (after a confirm) calls `POST /api/payments/give`. The cards below it are labelled sample data.
+- Urgent appeals: `components/app/LiveAppeals.tsx` at the top of Pip's suggestions. It asks `/api/pip/search` for charities with a current appeal, hides "Couldn't verify" ones, and "Give $X once" (after a confirm) calls `POST /api/payments/give`. Below it, an empty state says weekly suggestions are coming.
 - Discover → "Approve this plan" saves the split with `POST /api/payments/plan` (live charities keep their `live-…` ids). In sandbox every gift is paid to `PAYPAL_DEMO_PAYEE_EMAIL`, and the UI says so.
-- Each Pip search logs its tokens and web searches to the server console. Rough cost on Opus 5.5: $0.30–0.60 per fresh search; cached repeats are free.
+- Each Pip search logs its tokens and an estimated cost to the server console. Cached repeats are free.
 
 ## Status (9 Nov 2026)
 
 - Pushed to GitHub `main`; Vercel deploys from it. `ANTHROPIC_API_KEY` goes in Vercel's environment variables only (the dev laptop is a public PC: no `.env.local` is kept on it). Needs a redeploy after adding.
 - Submission checklist: MIT `LICENSE` added; README is judge-ready but still has `TODO`s (live URL, YouTube link, PayPal sandbox buyer login, optional GiveWise test account).
 - `next build` stops once on a Next.js security notice (it passes when run again). Upgrade Next.js if the Vercel build fails.
-- Still sample data (labelled): Impact, Pip's weekly check on My plan, the example cards on Pip's suggestions.
-- **Only charities Pip found (ids starting `live-`) can be in a plan or be paid.** `savePlan`, `runPaymentDay` and `giveOnce` refuse anything else (`isRealCharity` in `lib/payments.ts`). The sample plan (`SAMPLE_PLAN`) is display-only; the PayPal card shows "Find charities with Pip" until a real plan is saved.
-- Discover opens with Pip's live search. The made-up catalogue (`lib/discover-data.ts`) is hidden behind "Show example charities (sample data)", marked "Sample · not real", with no Verified labels, links or Add-to-picks. Onboarding's sample split can't be approved (the button becomes "Ask Pip to search again").
+- Impact shows real totals per charity from completed payments. Pip's weekly check and weekly suggestions aren't built: they show "coming" empty states.
+- **Only charities Pip found (ids starting `live-`) can be in a plan or be paid.** `savePlan`, `runPaymentDay` and `giveOnce` refuse anything else (`isRealCharity` in `lib/payments.ts`). `getPlan` returns no items until a plan is saved; the PayPal card shows "Find charities with Pip" until then.
+- Discover is Pip's live search only (the made-up catalogue was deleted). `lib/discover-data.ts` now only holds the `Charity` type and `hear()`.
+- Log in / sign up: the Google/PayPal buttons wait for `/api/me` before deciding a provider is off (a cold Vercel start used to show "isn't set up" on the first click).
 - In sandbox every gift goes to `PAYPAL_DEMO_PAYEE_EMAIL`, not the real charity. Real payouts need verified charity PayPal accounts (or PayPal Giving Fund).

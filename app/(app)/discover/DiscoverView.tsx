@@ -6,8 +6,7 @@ import Pip from "@/components/Pip";
 import EmptyState from "@/components/app/EmptyState";
 import LiveSearch from "@/components/app/LiveSearch";
 import { I, Ic } from "@/components/app/icons";
-import { useDemoState } from "@/lib/demo-state";
-import { CATALOG, PIP_REASONS, hear, type Charity } from "@/lib/discover-data";
+import { hear, type Charity } from "@/lib/discover-data";
 import { paymentsChanged, usePayments } from "@/lib/use-payments";
 
 const PIN = ["M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z", "M12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"];
@@ -17,14 +16,12 @@ const ALERT = ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 8v4", "M12 16h.
 const ARROW = ["M5 12h14", "M12 5l7 7-7 7"];
 
 export default function DiscoverView() {
-  const { state } = useDemoState();
   const [q, setQ] = useState("");
-  const [showExamples, setShowExamples] = useState(false);
   const [picks, setPicks] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"pip" | "manual">("pip");
   const [budget, setBudget] = useState(50);
-  const [man, setMan] = useState<Record<string, number>>({ cs: 25, bf: 15, rl: 10 });
+  const [man, setMan] = useState<Record<string, number>>({});
   const [sent, setSent] = useState(false);
   const [live, setLive] = useState<Charity[]>([]);
   const [saving, setSaving] = useState(false);
@@ -39,7 +36,7 @@ export default function DiscoverView() {
 
   // An existing plan starts with its charities already picked.
   useEffect(() => {
-    if (state === "full" && status?.planSaved) {
+    if (status?.planSaved) {
       const extras = status.plan
         .filter((i) => i.charityId.startsWith("live-"))
         .map((i): Charity => {
@@ -54,20 +51,17 @@ export default function DiscoverView() {
     }
     setPicks([]);
     setMan({});
-  }, [state, status?.planSaved]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [status?.planSaved]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const heard = useMemo(() => hear(q), [q]);
 
   const picked = [...live, ...planExtras.filter((e) => !live.some((l) => l.id === e.id))].filter((c) => picks.includes(c.id));
   const toggle = (id: string) => setPicks((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
-  // Pip's split: known reasons for the sample set, even shares otherwise.
+  // Pip's split: even shares in $5 steps, any remainder to the first pick.
   const pipSplit = useMemo(() => {
     const out: Record<string, number> = {};
     if (!picked.length) return out;
-    const known: Record<string, number> = { cs: 10, bf: 15, rl: 10, ht: 15 };
-    const isKnownSet = budget === 50 && picked.length === 4 && picked.every((c) => c.id in known);
-    if (isKnownSet) return { ...known };
     const each = Math.floor(budget / picked.length / 5) * 5;
     picked.forEach((c) => (out[c.id] = each));
     out[picked[0].id] += budget - each * picked.length;
@@ -126,7 +120,7 @@ export default function DiscoverView() {
         </div>
       </div>
 
-      {state === "empty" && !picks.length && (
+      {status && !status.planSaved && !picks.length && (
         <div className="banner" role="status" style={{ background: "var(--accent-soft)", borderColor: "var(--accent-line)" }}>
           <Pip mood="listening" size={34} motion={false} decorative />
           <p>
@@ -175,43 +169,6 @@ export default function DiscoverView() {
           />
         </section>
       )}
-
-      {/* Made-up charities from the design phase. Hidden unless asked for, and clearly marked. */}
-      <section style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <button className="btn btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setShowExamples((v) => !v)} aria-expanded={showExamples}>
-          {showExamples ? "Hide example charities" : "Show example charities (sample data)"}
-        </button>
-        {showExamples && (
-          <>
-            <div className="banner" role="note">
-              <span className="bdot" aria-hidden="true" />
-              <p><b>Sample data · not real charities.</b><span className="hide-m"> These show how a charity card looks. They can’t be added to a plan or paid.</span></p>
-            </div>
-            <div className="results">
-              {CATALOG.map((c) => (
-                <article key={c.id} className="ccard" aria-label={`${c.name} (sample)`}>
-                  <div className="top">
-                    <span className="logo-ph" style={{ background: c.tint, color: c.ink }}>{c.ini}</span>
-                    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-                      <h3>{c.name}</h3>
-                      <span className="loc"><Ic d={PIN} style={{ width: 12, height: 12 }} />{c.place}</span>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                    <span className="chip neutral">{c.causeLabel}</span>
-                    <span className="chip none">Sample · not real</span>
-                  </div>
-                  {c.outcome && (
-                    <div className="outcome">
-                      <span>{c.outcome}</span>
-                    </div>
-                  )}
-                </article>
-              ))}
-            </div>
-          </>
-        )}
-      </section>
 
       {picked.length > 0 && (
         <div className="tray" role="region" aria-label="Your picks">
@@ -282,12 +239,12 @@ export default function DiscoverView() {
                       <div className="pipnote">
                         <Pip mood="idle" size={40} />
                         <span>
-                          Here’s how I’d share <b className="num">${budget}</b>. I leaned toward charities with checked results{picks.includes("cs") ? ", and gave less to ClearSpring because its current project is already fully funded" : ""}. Edit anything you like.
+                          Here’s how I’d share <b className="num">${budget}</b>. I shared it evenly across your picks. Edit anything you like.
                         </span>
                       </div>
                       <div>
                         {picked.map((c) => {
-                          const r = PIP_REASONS[c.id] ?? ["Matches your search. Even share.", c.ver === "v" ? "ok" : c.ver === "p" ? "rev" : "conf-n", c.ver === "v" ? "Verified" : c.ver === "p" ? "Partly verified" : "Couldn’t verify"];
+                          const r = ["Matches your search. Even share.", c.ver === "v" ? "ok" : c.ver === "p" ? "rev" : "conf-n", c.ver === "v" ? "Verified" : c.ver === "p" ? "Partly verified" : "Couldn’t verify"];
                           return (
                             <div className="srow" key={c.id} style={{ gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr) 72px" }}>
                               <div className="who2">

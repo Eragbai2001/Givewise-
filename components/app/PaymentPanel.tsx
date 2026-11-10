@@ -87,7 +87,7 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
   const due = s.plan.filter((i) => !s.paidCharityIds.includes(i.charityId));
   const dueTotal = due.reduce((t, i) => t + i.amountCents, 0);
   const allPaid = s.plan.length > 0 && due.length === 0;
-  // Only a saved plan of charities Pip found can be paid. The sample plan is for show.
+  // Only a saved plan of charities Pip found can be paid.
   const realPlan = s.planSaved && s.plan.every((i) => i.charityId.startsWith("live-"));
   // Money left under this month's limit. If the rest of the plan doesn't fit, it waits for next month.
   const noRoom = !allPaid && s.givenThisMonthCents > 0 && dueTotal > s.hardLimitCents - s.givenThisMonthCents;
@@ -158,7 +158,7 @@ export default function PaymentPanel({ onChanged }: { onChanged?: () => void }) 
                     {busy === "run" ? "Sending…" : `Run payment day now · ${usd(dueTotal)}`}
                   </button>
                   <span className="pp-sub">
-                    {s.planSaved ? "Your approved plan" : "Sample plan until you approve your own"}
+                    Your approved plan
                     {due.length < s.plan.length ? ` · ${s.plan.length - due.length} already paid` : ""} · stops at your limit
                   </span>
                 </>

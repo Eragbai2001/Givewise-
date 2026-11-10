@@ -9,7 +9,8 @@ export type Me = { id: string; name: string; email: string; image: string | null
 export async function fetchMe(): Promise<{ user: Me | null; providers: { google: boolean; paypal: boolean } }> {
   try {
     const r = await fetch("/api/me", { cache: "no-store" });
-    return await r.json();
+    const d = await r.json();
+    return { user: d.user ?? null, providers: d.providers ?? { google: false, paypal: false } };
   } catch {
     return { user: null, providers: { google: false, paypal: false } };
   }

@@ -19,7 +19,7 @@ People want to give regularly, but they don’t know which charities are real, w
 Pip, a small water-droplet mascot, is the agent.
 
 1. **You tell Pip what you care about** and pick a monthly budget. That budget becomes a **hard limit**.
-2. **Pip researches charities on the live web** (Claude with web search). Every claim comes with a link, and a confidence label: **Verified**, **Partly verified** or **Couldn’t verify**.
+2. **Pip researches charities on the live web** (Tavily web search, read by Claude). Every claim comes with a link, and a confidence label: **Verified**, **Partly verified** or **Couldn’t verify**.
 3. **You connect PayPal once.** PayPal saves your approval. Nothing is charged by connecting.
 4. **You approve a monthly split.** On payment day, GiveWise creates one PayPal order per charity, paid from your PayPal straight to the charity. GiveWise never holds the money.
 5. **Pip finds urgent appeals.** If an appeal fits what you care about, Pip shows it with its sources and you can give extra once. Pip never approves anything for you.
@@ -38,7 +38,7 @@ Pip, a small water-droplet mascot, is the agent.
 | **PayPal Orders v2** with `vault_id` and `payee` | One order per charity on payment day, and one-off gifts to urgent appeals | `lib/paypal.ts`, `lib/payments.ts` |
 | **PayPal webhooks** | Failed, reversed or refunded payments, and revoked approvals | `app/api/paypal/webhook/route.ts` |
 | **Log in with PayPal** | Optional sign-in | `lib/auth.ts` |
-| **Claude (Opus 5.5) + web search** | Researches charities and current appeals, returns proof links | `lib/pip-search.ts`, `app/api/pip/search/route.ts` |
+| **Tavily search + Claude (Haiku 5.5)** | Tavily finds web pages; Claude reads them and returns charities and current appeals with proof links | `lib/pip-search.ts`, `app/api/pip/search/route.ts` |
 
 ---
 
@@ -93,8 +93,9 @@ Open http://localhost:3000. The database is created automatically: a local SQLit
 | `PAYPAL_DEMO_PAYEE_EMAIL` | Payments | A sandbox **business** account email. All test gifts land here |
 | `PAYPAL_TEST_BUYER_EMAIL`, `PAYPAL_TEST_BUYER_PASSWORD` | Optional | A sandbox **personal** account, shown on the Connect PayPal step |
 | `PAYPAL_WEBHOOK_ID` | Optional | Your app → Webhooks, pointing at `https://<your-site>/api/paypal/webhook` |
+| `TAVILY_API_KEY` | Pip’s web research | app.tavily.com (free plan: about 1,000 credits a month; each search uses 2) |
 | `ANTHROPIC_API_KEY` | Pip’s web research | console.anthropic.com → API keys |
-| `PIP_MODEL` | Optional | Defaults to `claude-opus-5-5`. `claude-sonnet-5-5` costs about half |
+| `PIP_MODEL` | Optional | Defaults to `claude-haiku-5-5` (about $0.01 a search) |
 | `PIP_HOURLY_LIMIT`, `PIP_DAILY_LIMIT` | Optional | New Pip searches allowed (defaults: 5 per person per hour, 15 a day in total) |
 | `DATABASE_URL` | Optional locally, needed on Vercel | Postgres connection string (e.g. Supabase, transaction pooler) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional | Google sign-in |
@@ -108,7 +109,7 @@ Check a production build with `npx next build`.
 
 **Real:** accounts, PayPal connection, plans and limits, payment day, one-off gifts, payment history, Pip’s web research on Discover, and urgent appeals on Pip’s suggestions.
 
-**Sample data (labelled in the app):** the built-in charity catalogue on Discover, Impact, Pip’s weekly check on My plan, the example cards on Pip’s suggestions, and the fixed three-charity split in onboarding.
+**No sample data.** Every charity in the app was found by Pip on the live web, and every number comes from your real plan and PayPal payments. Pip’s weekly check and impact reports aren’t built yet, so those sections say “coming” instead of showing made-up examples.
 
 ## What’s next
 
@@ -119,4 +120,4 @@ Check a production build with `npx next build`.
 
 ## Tech
 
-Next.js 16 (App Router) · React 19 · TypeScript · plain CSS · Better Auth · Postgres or SQLite · PayPal REST APIs · Anthropic Claude API.
+Next.js 16 (App Router) · React 19 · TypeScript · plain CSS · Better Auth · Postgres or SQLite · PayPal REST APIs · Tavily search API · Anthropic Claude API.

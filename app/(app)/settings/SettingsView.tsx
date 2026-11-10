@@ -5,10 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import Pip from "@/components/Pip";
 import EmptyState from "@/components/app/EmptyState";
 import { I, Ic } from "@/components/app/icons";
-import { useDemoState } from "@/lib/demo-state";
 import { isOnboarded } from "@/lib/onboarding";
 import { fetchMe, type Me } from "@/lib/auth-client";
-import { paymentsChanged } from "@/lib/use-payments";
+import { paymentsChanged, usePayments } from "@/lib/use-payments";
 
 type Tab = "profile" | "causes" | "budget" | "pip" | "notif" | "pay" | "sec";
 type ThemePick = "light" | "dark" | "system";
@@ -51,8 +50,7 @@ function applyTheme(pick: ThemePick) {
 }
 
 export default function SettingsView() {
-  const { state } = useDemoState();
-  const empty = state === "empty";
+  const { status } = usePayments();
   const [tab, setTab] = useState<Tab>("profile");
   const [onboarded, setOnboarded] = useState(true);
   const [theme, setTheme] = useState<ThemePick>("system");
@@ -75,13 +73,8 @@ export default function SettingsView() {
   }, []);
 
   // Things this account still doesn't have. Drives the notice and the dots on the tabs.
-  const missing: { tab: Tab; label: string }[] = empty
-    ? [
-        { tab: "causes", label: "Your causes" },
-        { tab: "budget", label: "Monthly budget" },
-        { tab: "pay", label: "PayPal" },
-      ]
-    : [];
+  const missing: { tab: Tab; label: string }[] = [];
+  if (status && !status.connected) missing.push({ tab: "pay", label: "PayPal" });
   const incomplete = !onboarded || missing.length > 0;
 
   const save = async () => {
@@ -124,7 +117,7 @@ export default function SettingsView() {
             <b>Your profile is incomplete</b>
             <p>
               {missing.length > 0
-                ? "You haven’t finished setting up, so Pip can’t suggest charities or a split yet. It only takes a couple of minutes."
+                ? "You haven’t connected PayPal yet, so nothing can be paid. It only takes a minute."
                 : "You skipped part of setup. Your plan still works, but finishing helps Pip suggest charities that fit you."}
             </p>
             {missing.length > 0 && (
@@ -151,11 +144,11 @@ export default function SettingsView() {
         </nav>
         <div className="set-body" role="tabpanel">
           {tab === "profile" && <Profile me={me} key={me?.id ?? "demo"} theme={theme} setTheme={(t) => { setTheme(t); applyTheme(t); }} />}
-          {tab === "causes" && <Causes empty={empty} />}
-          {tab === "budget" && <Budget empty={empty} register={(fn) => (saver.current = fn)} />}
+          {tab === "causes" && <Causes />}
+          {tab === "budget" && <Budget register={(fn) => (saver.current = fn)} />}
           {tab === "pip" && <PipPrefs />}
           {tab === "notif" && <Notifications />}
-          {tab === "pay" && <Payments state={state} />}
+          {tab === "pay" && <Payments />}
           {tab === "sec" && <Security />}
         </div>
       </section>
@@ -222,8 +215,8 @@ function Profile({ me, theme, setTheme }: { me: Me | null; theme: ThemePick; set
     <>
       <Row title="Your details" desc="Used on receipts and your yearly statement.">
         <div className="fields">
-          <label className="field">Full name<input defaultValue={me?.name ?? "Ada Lewis"} autoComplete="name" /></label>
-          <label className="field">Email<input type="email" defaultValue={me?.email ?? "ada.lewis@example.com"} autoComplete="email" readOnly={Boolean(me)} /></label>
+          <label className="field">Full name<input defaultValue={me?.name ?? ""} autoComplete="name" /></label>
+          <label className="field">Email<input type="email" defaultValue={me?.email ?? ""} autoComplete="email" readOnly={Boolean(me)} /></label>
           <label className="field">
             Country
             <select defaultValue="Nigeria">
@@ -255,9 +248,9 @@ function Profile({ me, theme, setTheme }: { me: Me | null; theme: ThemePick; set
   );
 }
 
-function Causes({ empty }: { empty: boolean }) {
-  const [causes, setCauses] = useState<string[]>(empty ? [] : ["Clean water", "Girls’ education", "Local community aid"]);
-  const [never, setNever] = useState<string[]>(empty ? [] : ["Political campaigns"]);
+function Causes() {
+  const [causes, setCauses] = useState<string[]>([]);
+  const [never, setNever] = useState<string[]>([]);
   const [adding, setAdding] = useState(false);
   const left = ALL_CAUSES.filter((c) => !causes.includes(c));
   const move = (i: number) => setCauses((c) => { const n = [...c]; [n[i - 1], n[i]] = [n[i], n[i - 1]]; return n; });
@@ -324,7 +317,7 @@ function Causes({ empty }: { empty: boolean }) {
       <Row title="Where" desc="Where you’d like your giving to go.">
         <label className="field" style={{ maxWidth: 320 }}>
           <span className="sr-only">Location</span>
-          <select defaultValue={empty ? "Anywhere" : "Nigeria first, then anywhere"}>
+          <select defaultValue="Anywhere">
             <option>Nigeria first, then anywhere</option>
             <option>Nigeria only</option>
             <option>Africa</option>
@@ -357,9 +350,9 @@ function Causes({ empty }: { empty: boolean }) {
   );
 }
 
-function Budget({ empty, register }: { empty: boolean; register: (fn: null | (() => Promise<string | null>)) => void }) {
-  const [hard, setHard] = useState(empty ? "" : "50");
-  const [oneoff, setOneoff] = useState(empty ? "" : "50");
+function Budget({ register }: { register: (fn: null | (() => Promise<string | null>)) => void }) {
+  const [hard, setHard] = useState("");
+  const [oneoff, setOneoff] = useState("");
   const [planned, setPlanned] = useState(0);
   const MAX = 50;
 
@@ -402,12 +395,6 @@ function Budget({ empty, register }: { empty: boolean; register: (fn: null | (()
 
   return (
     <>
-      {empty && (
-        <div className="banner" role="status" style={{ marginTop: 16 }}>
-          <span className="bdot" aria-hidden="true" />
-          <p><b>No limit set yet</b> · until you set one, nothing can be paid.</p>
-        </div>
-      )}
       <Row title="Hard limit" desc="GiveWise can never go above this in a month, whatever happens. The server checks it before every payment.">
         <div className="fields">
           <Money
@@ -485,73 +472,62 @@ function Notifications() {
   );
 }
 
-function Payments({ state }: { state: "full" | "new" | "empty" }) {
-  const [connected, setConnected] = useState(state !== "empty");
-  const [paused, setPaused] = useState(false);
-  const [confirm, setConfirm] = useState(false);
+function Payments() {
+  const { status, loaded } = usePayments();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  if (!connected)
-    return (
-      <Row title="PayPal connection" desc="Gifts go straight from your PayPal to each charity. GiveWise never holds your money or sees your card.">
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div className="ppcard">
-            <span style={{ width: 40, height: 40, borderRadius: 10, background: "var(--grey-soft)", color: "var(--grey-ink)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Ic d={I.wallet} />
-            </span>
-            <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column" }}>
-              <b style={{ fontWeight: 600 }}>PayPal isn’t connected</b>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>Connect it to start monthly giving. You approve the amount in PayPal.</span>
-            </div>
-            <span className="chip none">Not connected</span>
-          </div>
-          {/* TODO: start PayPal billing-agreement OAuth here. */}
-          <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} onClick={() => setConnected(true)}>
-            <Ic d={I.wallet} />Connect PayPal
-          </button>
-        </div>
-      </Row>
-    );
+  async function connect() {
+    setErr("");
+    setBusy(true);
+    const r = await fetch("/api/paypal/vault/start", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ to: "plan" }) }).catch(() => null);
+    const d = r ? await r.json().catch(() => ({})) : {};
+    if (r?.ok && d.url) {
+      window.location.href = d.url;
+      return;
+    }
+    setErr(d.error || "PayPal couldn’t be reached. Please try again.");
+    setBusy(false);
+  }
 
-  const hasPaid = state === "full";
+  if (!loaded) return <p style={{ margin: 0, padding: 16, color: "var(--muted)" }}>Loading…</p>;
+
+  const paidCount = (status?.payments ?? []).filter((p) => p.status === "COMPLETED").length;
+  const planTotal = (status?.plan ?? []).reduce((t, i) => t + i.amountCents, 0);
+  const next = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
   return (
-    <>
-      <Row title="PayPal connection" desc="Gifts go straight from your PayPal to each charity. GiveWise never holds your money or sees your card.">
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div className="ppcard">
-            <span style={{ width: 40, height: 40, borderRadius: 10, background: "var(--grey-soft)", color: "var(--grey-ink)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Ic d={I.wallet} />
+    <Row title="PayPal connection" desc="Gifts go straight from your PayPal to each charity. GiveWise never holds your money or sees your card.">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="ppcard">
+          <span style={{ width: 40, height: 40, borderRadius: 10, background: "var(--grey-soft)", color: "var(--grey-ink)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Ic d={I.wallet} />
+          </span>
+          <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column" }}>
+            <b style={{ fontWeight: 600 }}>
+              {status?.connected ? `PayPal${status.env === "sandbox" ? " sandbox" : ""}${status.paypalEmail ? ` · ${status.paypalEmail}` : ""}` : "PayPal isn’t connected"}
+            </b>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              {status?.connected ? "Saved with your approval. Nothing is charged until payment day." : "Connect it to start monthly giving. Nothing is charged by connecting."}
             </span>
-            <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column" }}>
-              <b style={{ fontWeight: 600 }}>PayPal sandbox · ada.lewis@example.com</b>
-              <span style={{ fontSize: 12, color: "var(--muted)" }}>
-                Connected {hasPaid ? "10 Jun 2026" : "9 Oct 2026"} · approved up to $50/month
-              </span>
-            </div>
-            {paused ? <span className="chip rev"><i />Paused</span> : <span className="chip ok"><i />Connected</span>}
           </div>
+          {status?.connected ? <span className="chip ok"><i />Connected</span> : <span className="chip none">Not connected</span>}
+        </div>
+        {status?.connected ? (
           <dl className="kv">
-            <dt>Next payment</dt>
-            <dd className="num">{paused ? "None while paused" : "1 Nov 2026 · $50.00 to 3 charities"}</dd>
-            <dt>Payments this year</dt>
-            <dd className="num">{hasPaid ? "15 · all paid" : "None yet"}</dd>
+            <dt>Next payment day</dt>
+            <dd className="num">{status.planSaved ? `${next} · $${(planTotal / 100).toFixed(2)} to ${status.plan.length} ${status.plan.length === 1 ? "charity" : "charities"}` : "No plan yet"}</dd>
+            <dt>Payments so far</dt>
+            <dd className="num">{paidCount ? `${paidCount} paid` : "None yet"}</dd>
           </dl>
-        </div>
-      </Row>
-      <Row title="Pause or stop" desc="Pausing keeps your plan. Disconnecting stops every future payment.">
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <button className="btn" onClick={() => setPaused((p) => !p)}>{paused ? "Resume giving" : "Pause all giving"}</button>
-          {confirm ? (
-            <>
-              <span style={{ fontSize: 13, color: "var(--text2)" }}>Stop every future payment?</span>
-              <button className="btn danger" onClick={() => { setConnected(false); setConfirm(false); }}>Yes, disconnect</button>
-              <button className="btn" onClick={() => setConfirm(false)}>Keep connected</button>
-            </>
-          ) : (
-            <button className="btn danger" onClick={() => setConfirm(true)}>Disconnect PayPal</button>
-          )}
-        </div>
-      </Row>
-    </>
+        ) : (
+          <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} onClick={connect} disabled={busy} aria-busy={busy}>
+            <Ic d={I.wallet} />{busy ? "Opening PayPal…" : "Connect PayPal"}
+          </button>
+        )}
+        {err && <span className="form-err" role="alert">{err}</span>}
+      </div>
+    </Row>
   );
 }
 

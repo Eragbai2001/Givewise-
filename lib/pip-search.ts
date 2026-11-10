@@ -4,11 +4,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { query } from "./db";
 
 /**
- * Pip's research agent. Claude searches the live web (news, registries, charity sites,
- * public social posts that search engines index), then returns charities with proof links.
+ * Pip's research agent. Tavily searches the live web (news, registries, charity sites,
+ * public posts that search engines index). Claude Haiku reads those results and returns
+ * charities with proof links. Tavily has a free tier and Haiku costs far less than Opus.
  *
  * Trust rules enforced HERE, not trusted from the model:
- *  - A proof link only counts if that exact URL appeared in the web search results.
+ *  - A proof link only counts if that exact URL came back from Tavily.
  *  - Confidence is recomputed from the validated proofs; the model can only lower it.
  */
 export type ProofKind = "registry" | "report" | "news" | "official" | "social" | "other";
@@ -32,7 +33,7 @@ export type SearchResult = { summary: string; results: FoundCharity[]; searchedA
 export class NotConfigured extends Error {}
 export class RateLimited extends Error {}
 
-const MODEL = process.env.PIP_MODEL ?? "claude-opus-5-5";
+const MODEL = process.env.PIP_MODEL ?? "claude-haiku-5-5";
 const CACHE_HOURS = 6;
 // Spending guards. Cached repeats don't count. Change them in .env.local.
 const HOURLY_LIMIT = Number(process.env.PIP_HOURLY_LIMIT) || 5; // per donor
@@ -40,7 +41,7 @@ const DAILY_LIMIT = Number(process.env.PIP_DAILY_LIMIT) || 15; // across everyon
 
 const SYSTEM = `You are Pip's research desk for GiveWise, an app that helps people give to charities they can trust.
 
-Find real, currently operating charities, NGOs, animal shelters/rescues or community causes that match the donor's request, using web search. Include animal causes (dogs, puppies, strays, rescues) when asked.
+Find real, currently operating charities, NGOs, animal shelters/rescues or community causes that match the donor's request, using ONLY the numbered web search results you are given. Include animal causes (dogs, puppies, strays, rescues) when asked.
 
 For each result, gather PROOF the donor can open:
 - registry: a government or regulator record (charity commission, IRS/tax-exempt lookup, CAC, etc.)
@@ -51,14 +52,14 @@ For each result, gather PROOF the donor can open:
 - other
 
 Rules you must follow:
-1. Only use URLs that appeared in your search results. Never invent, guess or "fix" a URL.
+1. Only use URLs exactly as they appear in the search results. Never invent, guess or "fix" a URL. Don't add facts from memory: if the results don't say it, leave it out.
 2. If you could not find proof for something, say so. Do not fill gaps with plausible-sounding facts.
 3. "need" is what they need right now and why, only if a source shows it (an active appeal, a recent post, a news story). Otherwise write "No current appeal found".
 4. Note red flags: no registration found, no recent updates, only social media presence, vague finances, pressure to give urgently.
 5. Prefer charities with several independent sources. Return at most 5 results, best evidence first.
 6. Be plain and short. No hype.
 
-When you are done, reply with ONLY a JSON object in a \`\`\`json fenced block, exactly this shape:
+Reply with ONLY a JSON object in a \`\`\`json fenced block, exactly this shape:
 {"summary": string, "results": [{"name": string, "cause": string, "place": string, "what": string, "need": string, "website": string|null, "donateUrl": string|null, "confidence": "verified"|"partial"|"none", "confidenceReason": string, "proofs": [{"url": string, "title": string, "kind": "registry"|"report"|"news"|"official"|"social"|"other", "note": string}], "redFlags": [string]}]}`;
 
 function domainOf(u: string) {
@@ -111,21 +112,6 @@ async function takeSearchToken(userId: string) {
   if ((await bump(`rl:all:${now.slice(0, 10)}`)) > DAILY_LIMIT) {
     throw new RateLimited("Pip has done all its new searches for today. Recent searches still work. Please try again tomorrow.");
   }
-}
-
-/** Pull every URL that actually showed up in the web search results (and citations). */
-function collectSeenUrls(content: unknown[]) {
-  const seen = new Set<string>();
-  for (const block of content as Record<string, unknown>[]) {
-    if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
-      for (const r of block.content as { url?: string }[]) if (r.url) seen.add(normUrl(r.url));
-    }
-    if (block.type === "text" && Array.isArray(block.citations)) {
-      for (const c of block.citations as { url?: string }[]) if (c.url) seen.add(normUrl(c.url));
-    }
-  }
-  seen.delete("");
-  return seen;
 }
 
 const KINDS: ProofKind[] = ["registry", "report", "news", "official", "social", "other"];
@@ -190,11 +176,7 @@ function sanitize(raw: unknown, seen: Set<string>): { summary: string; results: 
   return { summary: typeof obj.summary === "string" ? obj.summary.slice(0, 500) : "", results };
 }
 
-function extractJson(content: unknown[]) {
-  const text = (content as { type: string; text?: string }[])
-    .filter((b) => b.type === "text" && b.text)
-    .map((b) => b.text)
-    .join("\n");
+function extractJson(text: string) {
   const fenced = text.match(/```json\s*([\s\S]*?)```/i)?.[1];
   const candidate = fenced ?? text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
   try {
@@ -204,47 +186,47 @@ function extractJson(content: unknown[]) {
   }
 }
 
-async function runModel(client: Anthropic, request: string) {
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: request }];
-  const all: unknown[] = [];
-  const used = { input: 0, output: 0, searches: 0 };
+type WebHit = { url: string; title: string; content: string; published: string | null };
 
-  for (let turn = 0; turn < 4; turn++) {
-    const params = {
-      model: MODEL,
-      max_tokens: 16000,
-      system: SYSTEM,
-      thinking: { type: "adaptive" as const },
-      output_config: { effort: "medium" as const },
-      tools: [{ type: "web_search_20260209" as const, name: "web_search" as const, max_uses: 8 }],
-      messages,
-    };
-    // Safety fallback is on by default for this model; if the API rejects the parameter, retry without it.
-    let msg: Anthropic.Beta.BetaMessage;
-    try {
-      msg = await client.beta.messages.stream({ ...params, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" }).finalMessage();
-    } catch (e) {
-      if (e instanceof Anthropic.BadRequestError && /fallback|beta/i.test(e.message)) {
-        msg = await client.beta.messages.stream(params).finalMessage();
-      } else throw e;
-    }
-    all.push(...msg.content);
-    used.input += msg.usage.input_tokens + (msg.usage.cache_read_input_tokens ?? 0) + (msg.usage.cache_creation_input_tokens ?? 0);
-    used.output += msg.usage.output_tokens;
-    used.searches += msg.usage.server_tool_use?.web_search_requests ?? 0;
-    if (msg.stop_reason === "refusal") break;
-    if (msg.stop_reason !== "pause_turn") break;
-    // Server-side search needs more time: hand the partial turn back and let it continue.
-    messages.push({ role: "assistant", content: msg.content });
+/** One Tavily search (1 credit). https://docs.tavily.com/documentation/api-reference/endpoint/search */
+async function tavily(key: string, query: string, topic: "general" | "news"): Promise<WebHit[]> {
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query, topic, search_depth: "basic", max_results: 8, chunks_per_source: 3 }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(25_000),
+  });
+  if (!res.ok) throw new Error(`Tavily search failed (${res.status})`);
+  const data = (await res.json()) as { results?: { url?: string; title?: string; content?: string; published_date?: string | null }[] };
+  return (data.results ?? [])
+    .filter((r) => r.url && /^https?:\/\//i.test(r.url))
+    .map((r) => ({ url: r.url!, title: (r.title ?? "").slice(0, 200), content: (r.content ?? "").slice(0, 1200), published: r.published_date ?? null }));
+}
+
+/** Two searches: the web in general (charity sites, registries, reports) and recent news (independent coverage, appeals). */
+async function searchWeb(key: string, q: string) {
+  const runs = await Promise.allSettled([tavily(key, `${q} charity`, "general"), tavily(key, `${q} charity`, "news")]);
+  const ok = runs.filter((r): r is PromiseFulfilledResult<WebHit[]> => r.status === "fulfilled");
+  if (!ok.length) {
+    console.error("[GiveWise] Tavily failed:", runs.map((r) => (r.status === "rejected" ? String(r.reason) : "ok")).join("; "));
+    throw new Error("Pip couldn’t reach the web search just now. Please try again.");
   }
-  // Rough cost so you can watch spend in the server log (list prices: Opus 5.5 $4/$20 per M tokens, $0.01 per web search).
-  console.log(`[GiveWise] Pip search used ${used.input} input + ${used.output} output tokens and ${used.searches} web searches (model ${MODEL}).`);
-  return all;
+  const hits: WebHit[] = [];
+  const seen = new Set<string>();
+  for (const h of ok.flatMap((r) => r.value)) {
+    const n = normUrl(h.url);
+    if (!n || seen.has(n)) continue;
+    seen.add(n);
+    hits.push(h);
+  }
+  return { hits: hits.slice(0, 16), seen };
 }
 
 export async function searchCharities(opts: { query: string; userId: string }): Promise<SearchResult> {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new NotConfigured("Pip’s web search isn’t switched on yet.");
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const tavilyKey = process.env.TAVILY_API_KEY;
+  if (!anthropicKey || !tavilyKey) throw new NotConfigured("Pip’s web search isn’t switched on yet.");
 
   const q = opts.query.trim().replace(/\s+/g, " ").slice(0, 300);
   const cacheKey = "s:" + createHash("sha256").update(q.toLowerCase()).digest("hex").slice(0, 32);
@@ -254,14 +236,41 @@ export async function searchCharities(opts: { query: string; userId: string }): 
 
   await takeSearchToken(opts.userId);
 
-  const client = new Anthropic({ apiKey: key });
-  const today = new Date().toISOString().slice(0, 10);
-  const content = await runModel(client, `Today is ${today}. Donor request: "${q}"\n\nFind charities that match, with proof links.`);
+  const { hits, seen } = await searchWeb(tavilyKey, q);
+  if (!hits.length) {
+    return { summary: "I couldn’t find anything on the web for that. Try different words.", results: [], searchedAt: new Date().toISOString(), cached: false };
+  }
 
-  const parsed = extractJson(content);
+  // Only URLs from this list can become proof links (sanitize checks against `seen`).
+  const sources = hits
+    .map((h, i) => `[${i + 1}] ${h.title}\nURL: ${h.url}${h.published ? `\nPublished: ${h.published}` : ""}\n${h.content}`)
+    .join("\n\n");
+  const today = new Date().toISOString().slice(0, 10);
+
+  const client = new Anthropic({ apiKey: anthropicKey });
+  const msg = await client.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    output_config: { effort: "low" },
+    system: SYSTEM,
+    messages: [
+      {
+        role: "user",
+        content: `Today is ${today}. Donor request: "${q}"\n\nWeb search results:\n\n${sources}\n\nFind charities that match, with proof links taken from these results only.`,
+      },
+    ],
+  });
+  if (msg.stop_reason === "refusal") throw new Error("Pip couldn’t research that request.");
+
+  // Rough cost so you can watch spend in the server log (Haiku 5.5 list price: $0.10 / $0.50 per M tokens). Plus 2 Tavily credits.
+  const cost = (msg.usage.input_tokens * 0.1 + msg.usage.output_tokens * 0.5) / 1_000_000;
+  console.log(`[GiveWise] Pip search: ${hits.length} web results, ${msg.usage.input_tokens} in + ${msg.usage.output_tokens} out tokens on ${MODEL} (about $${cost.toFixed(4)}), 2 Tavily credits.`);
+
+  const text = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
+  const parsed = extractJson(text);
   if (!parsed) throw new Error("Pip couldn’t put its findings together. Please try again.");
 
-  const clean = sanitize(parsed, collectSeenUrls(content));
+  const clean = sanitize(parsed, seen);
   const result = { ...clean, searchedAt: new Date().toISOString() };
   await put(cacheKey, JSON.stringify(result));
   return { ...result, cached: false };

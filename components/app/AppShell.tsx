@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { PipLogo } from "../Pip";
 import ThemeToggle from "../ThemeToggle";
 import { I, Ic } from "./icons";
-import { DemoStateSwitcher, useDemoState } from "@/lib/demo-state";
 import { authClient, fetchMe, type Me } from "@/lib/auth-client";
 import { setOnboardedLocal } from "@/lib/onboarding";
 import { usePayments } from "@/lib/use-payments";
@@ -14,7 +13,7 @@ import { usePayments } from "@/lib/use-payments";
 const MAIN = [
   { href: "/plan", label: "My plan", icon: I.plan },
   { href: "/discover", label: "Discover", icon: I.search },
-  { href: "/suggestions", label: "Pip’s suggestions", icon: I.bulb, count: 3 },
+  { href: "/suggestions", label: "Pip’s suggestions", icon: I.bulb },
   { href: "/impact", label: "Impact", icon: I.heart },
   { href: "/history", label: "History & receipts", icon: I.file },
 ];
@@ -38,9 +37,6 @@ const TITLES: Record<string, string> = {
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const active = (href: string) => path === href || path.startsWith(href + "/");
-  const { state } = useDemoState();
-  const hasPlan = state !== "empty";
-  const suggestions = state === "full" ? 3 : 0;
 
   // Signed-in user (null = browsing the demo without an account).
   const router = useRouter();
@@ -63,7 +59,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const givenC = status?.givenThisMonthCents ?? 0;
   const plannedC = status?.planSaved ? status.plan.reduce((t, i) => t + i.amountCents, 0) : 0;
   const pct = Math.min(100, Math.round((givenC / limitC) * 100));
-  const initials = (me?.name || "Ada Lewis").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  const initials = (me?.name || me?.email || "").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const logout = async (e: React.MouseEvent) => {
     e.preventDefault();
     await authClient.signOut();
@@ -112,7 +108,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <Link key={n.href} href={n.href} className={active(n.href) ? "on" : ""} aria-current={active(n.href) ? "page" : undefined} title={n.label}>
                 <Ic d={n.icon} small={false} />
                 <span className="lbl">{n.label}</span>
-                {n.count && suggestions ? <span className="count num">{suggestions}</span> : null}
               </Link>
             ))}
           </nav>
@@ -127,32 +122,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
           <div className="side-foot">
             <div className="guard">
-              {hasPlan ? (
-                <>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
-                      <Ic d={I.lock} style={{ color: "var(--accent-ink)" }} />
-                      Spending limit
-                    </span>
-                    <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{usd(limitC)}/mo</span>
-                  </div>
-                  <div className="meter" role="img" aria-label={`${usd(givenC)} of ${usd(limitC)} monthly limit given this month`}>
-                    <span style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="num" style={{ fontSize: 12, color: "var(--muted)" }}>
-                    {usd(givenC)} given this month · {usd(plannedC)} planned
-                  </span>
-                </>
-              ) : (
-                <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
-                    <Ic d={I.lock} style={{ color: "var(--muted)" }} />
-                    No limit set yet
+                    <Ic d={I.lock} style={{ color: "var(--accent-ink)" }} />
+                    Spending limit
                   </span>
-                  <span style={{ fontSize: 12, color: "var(--muted)", lineHeight: "16px" }}>You’ll choose a monthly limit when you set up with Pip.</span>
-                  <Link className="btn btn-sm" href="/onboarding" style={{ alignSelf: "flex-start" }}>Set up</Link>
-                </>
-              )}
+                  <span className="num" style={{ fontSize: 13, fontWeight: 600 }}>{usd(limitC)}/mo</span>
+                </div>
+                <div className="meter" role="img" aria-label={`${usd(givenC)} of ${usd(limitC)} monthly limit given this month`}>
+                  <span style={{ width: `${pct}%` }} />
+                </div>
+                <span className="num" style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {usd(givenC)} given this month · {usd(plannedC)} planned
+                </span>
               <span style={{ display: "flex", gap: 6, fontSize: 12, lineHeight: "16px", color: "var(--text2)", paddingTop: 8, borderTop: "1px solid var(--line)" }}>
                 <Ic d={I.shield} style={{ color: "var(--accent-ink)", marginTop: 1 }} />
                 Nothing moves without your approval
@@ -182,24 +164,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
             <span style={{ flex: 1 }} />
             <ThemeToggle />
-            <Link className="iconbtn" href="/suggestions" aria-label={suggestions ? `Pip’s suggestions, ${suggestions} new` : "Pip’s suggestions, none new"}>
+            <Link className="iconbtn" href="/suggestions" aria-label="Pip’s suggestions">
               <Ic d={I.bell} />
-              {suggestions ? <span className="dot" /> : null}
             </Link>
             <div className="me">
-              <span className="avatar" title={me ? `${me.name} · ${me.email}` : "Demo account"}>{initials}</span>
+              <span className="avatar" title={me ? `${me.name} · ${me.email}` : undefined}>{initials}</span>
             </div>
           </header>
           <div className="guard-strip">
             <span>
               <Ic d={I.lock} />
-              {hasPlan ? (
-                <>
-                  Limit <span className="num">{usd(limitC)}</span>/mo
-                </>
-              ) : (
-                "No limit set"
-              )}
+              Limit <span className="num">{usd(limitC)}</span>/mo
             </span>
             <span>
               <Ic d={I.shield} />
@@ -220,7 +195,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </div>
-      <DemoStateSwitcher />
     </div>
   );
 }

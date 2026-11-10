@@ -85,7 +85,8 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
   const nextPath = (onboarded: boolean) => (isSignup || !onboarded ? onboarding : "/plan");
 
   // Which social buttons are live, and where to send people after OAuth.
-  const [providers, setProviders] = useState({ google: false, paypal: false });
+  // null until the server answers. A cold server can take a few seconds, so a click must not decide before that.
+  const [providers, setProviders] = useState<{ google: boolean; paypal: boolean } | null>(null);
   useEffect(() => {
     fetchMe().then((r) => setProviders(r.providers));
     const err = params.get("error");
@@ -137,7 +138,9 @@ export default function AuthScreen({ mode }: { mode: Mode }) {
 
   async function sso(provider: "paypal" | "google") {
     setSsoNote("");
-    if (!providers[provider]) {
+    const live = providers ?? (await fetchMe()).providers;
+    if (!providers) setProviders(live);
+    if (!live[provider]) {
       setSsoNote(`${provider === "paypal" ? "PayPal" : "Google"} sign-in isn’t set up on this server yet. Use email for now.`);
       return;
     }
