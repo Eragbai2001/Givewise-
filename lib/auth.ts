@@ -18,6 +18,16 @@ function escapeHtml(v: string) {
   return v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+/**
+ * Every public address the app answers on: the custom domain, www, and the Vercel backup link,
+ * plus BETTER_AUTH_URL. Sign-in from any of them is accepted.
+ */
+export function publicOrigins() {
+  const list = ["https://givewithpip.com", "https://www.givewithpip.com", "https://givewise-seven.vercel.app"];
+  if (env.BETTER_AUTH_URL) list.push(new URL(env.BETTER_AUTH_URL).origin);
+  return [...new Set(list)];
+}
+
 const options = {
   appName: "GiveWise",
   baseURL: env.BETTER_AUTH_URL,
@@ -25,7 +35,7 @@ const options = {
   // Plus the public URL (ngrok / deploy) from BETTER_AUTH_URL, so no code edit when it changes.
   trustedOrigins: [
     ...Array.from({ length: 10 }, (_, i) => `http://localhost:${3000 + i}`),
-    ...(env.BETTER_AUTH_URL ? [new URL(env.BETTER_AUTH_URL).origin] : []),
+    ...publicOrigins(),
   ],
   secret: env.BETTER_AUTH_SECRET,
   database: authDatabase(),
