@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     connected: Boolean(connection),
     paypalEmail: connection?.email ?? null,
     env: sandbox ? "sandbox" : "live",
-    // Fake-money login for judges. Never sent in live mode.
+    // Fake-money login for testers. Never sent in live mode.
     testLogin: sandbox && testEmail && testPassword ? { email: testEmail, password: testPassword } : null,
     hardLimitCents: limits.hardLimitCents,
     oneOffLimitCents: limits.oneOffLimitCents,

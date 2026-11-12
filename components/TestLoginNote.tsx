@@ -4,7 +4,7 @@ import { useState } from "react";
 
 export type TestLogin = { email: string; password: string };
 
-/** Sandbox only: the fake PayPal login judges can use on PayPal's page. */
+/** Sandbox only: the fake PayPal login testers can use on PayPal's page. */
 export default function TestLoginNote({ login }: { login: TestLogin | null | undefined }) {
   const [copied, setCopied] = useState("");
   if (!login) return null;
