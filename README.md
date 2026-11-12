@@ -4,7 +4,7 @@
 
 Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/) (2026).
 
-- **Live demo:** https://givewise-seven.vercel.app <!-- TODO: confirm this is the current deploy -->
+- **Live demo:** https://givewithpip.com (backup: https://givewise-seven.vercel.app)
 - **Demo video:** <!-- TODO: YouTube link -->
 - **License:** MIT (see [LICENSE](LICENSE))
 
