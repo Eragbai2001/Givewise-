@@ -9,3 +9,7 @@ next-env.d.ts
 # local database
 givewise.db*
 .env.local
+
+# internal notes for AI assistants (kept local only)
+CLAUDE.md
+AGENTS.md
